@@ -1,0 +1,21 @@
+# build artifacts
+bin/
+dist/
+lib/
+pkg/
+tools/*.exe
+tools/*.part
+*.exe
+*.dll
+
+# user data / local artifacts
+*.user
+preview_dump.png
+fps_status*.txt
+error.txt
+startup_error.txt
+*.log
+
+# OS
+Thumbs.db
+Desktop.ini

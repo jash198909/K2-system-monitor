@@ -1,0 +1,17 @@
+# Normalize line endings; batch/PowerShell scripts keep CRLF.
+* text=auto
+
+*.cs       text eol=lf
+*.md       text eol=lf
+*.txt      text eol=lf
+LICENSE    text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+*.manifest text eol=lf
+*.cmd      text eol=crlf
+*.ps1      text eol=crlf
+
+*.ico      binary
+*.png      binary
+*.exe      binary
+*.dll      binary

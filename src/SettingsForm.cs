@@ -1,0 +1,1297 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.IO;
+using System.Windows.Forms;
+
+namespace K2
+{
+    public class SettingsForm : Form
+    {
+        // ---- палитра настроек (тёмно-синяя с бирюзовым) ----
+        static readonly Color WBack = Color.FromArgb(20, 26, 34);
+        static readonly Color NavBack = Color.FromArgb(16, 22, 30);
+        static readonly Color NavSel = Color.FromArgb(34, 49, 66);
+        static readonly Color NavText = Color.FromArgb(232, 240, 245);
+        static readonly Color NavDim = Color.FromArgb(120, 140, 158);
+        static readonly Color Acc = Color.FromArgb(0, 191, 166);
+        static readonly Color AccDim = Color.FromArgb(30, 90, 84);
+        static readonly Color LineC = Color.FromArgb(38, 50, 65);
+        static readonly Color CtlBack = Color.FromArgb(30, 41, 54);
+        static readonly Color CtlBorder = Color.FromArgb(52, 70, 92);
+        static readonly Color OffC = Color.FromArgb(70, 86, 104);
+        static readonly Color WarnText = Color.FromArgb(255, 138, 96);
+
+        class SRow
+        {
+            public string Kind;      // toggle, slider, combo, hotkey, buttons, info, section, order
+            public string Label;
+            public string Key;
+            public string[] Options;
+            public int Min, Max;
+            public Rectangle Rect, Ctl;
+            public string[] Buttons;
+            public int OrderIndex;
+            public object Tag;
+        }
+
+        MainForm owner;
+        Settings draft;
+        string section = "general";
+        List<SRow> rows = new List<SRow>();
+        int scroll, scrollMax;
+
+        SRow popupRow;
+        Rectangle popupRect;
+        string[] popupItems;
+        List<Rectangle> popupHits = new List<Rectangle>();
+        List<int> popupHitIdx = new List<int>();
+        int popupScroll;
+
+        SRow dragRow;
+        SRow captureRow;
+        bool topDrag;
+        Point topDragOff;
+
+        PreviewControl prev;
+        Stats fakeStats = new Stats();
+        Timer anim;
+        Random rnd = new Random();
+        const int PreviewW = 340, PreviewH = 560;
+        Snapshot fake = null;
+
+        RectangleF closeRect;
+        RectangleF maxRect;
+        bool maxed;
+        Rectangle restoreBounds = Rectangle.Empty;
+        Rectangle rectApply, rectApplyClose, rectCancel, rectExport, rectImport, rectReset;
+        Rectangle rectCoffee;
+        const string CoffeeUrl = "https://www.donationalerts.com/r/jash_k2";
+        Font fTitle, fBread, fNav, fNavCat, fLabel, fValue, fSmall, fBig2, fClose;
+        static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
+
+        static readonly string[] SectionNames = new string[]
+        {
+            "general", "pos", "look", "keys", "fps", "gpu", "cpu", "ram", "stat", "ftg"
+        };
+        static readonly string[] SectionTitles = new string[]
+        {
+            "Общие", "Расположение", "Внешний вид", "Горячие клавиши",
+            "FPS", "Видеокарта", "Процессор", "ОЗУ", "Статистика", "График времени кадра"
+        };
+
+        public SettingsForm(MainForm owner)
+        {
+            this.owner = owner;
+            this.draft = owner.St.Clone();
+            Text = "K2 — настройки";
+            FormBorderStyle = FormBorderStyle.None;
+            StartPosition = FormStartPosition.CenterScreen;
+            BackColor = WBack;
+            TopMost = false;
+            ShowInTaskbar = true;
+            DoubleBuffered = true;
+            AutoScaleMode = AutoScaleMode.None;
+            KeyPreview = true;
+            ClientSize = new Size(1100, 720);
+            MinimumSize = new Size(920, 560);
+            try { Icon = MainForm.AppIcon(); } catch { }
+            fTitle = new Font("Segoe UI", 11.5f, FontStyle.Bold);
+            fBread = new Font("Segoe UI", 9.75f);
+            fNav = new Font("Segoe UI", 9.75f);
+            fNavCat = new Font("Segoe UI", 8.25f, FontStyle.Bold);
+            fLabel = new Font("Segoe UI", 10f);
+            fValue = new Font("Segoe UI", 9.5f);
+            fSmall = new Font("Segoe UI", 8.5f);
+            fBig2 = new Font("Segoe UI", 20f, FontStyle.Bold);
+            fClose = new Font("Segoe UI", 11f);
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            BuildRows();
+            RebuildPreview();
+            StartPreviewAnimation();
+        }
+
+        public void RefreshPreview() { RebuildPreview(); Invalidate(); }
+
+        // значение из трей-меню может измениться, пока окно открыто — подтягиваем
+        public void SyncFromApplied()
+        {
+            draft.Set("ov.interval", owner.St.GetS("ov.interval"));
+            Invalidate();
+        }
+
+        // ---------- структура разделов ----------
+        SRow R(string kind, string label, string key)
+        {
+            SRow r = new SRow(); r.Kind = kind; r.Label = label; r.Key = key;
+            rows.Add(r); return r;
+        }
+        SRow T(string label, string key) { return R("toggle", label, key); }
+        SRow SL(string label, string key, int min, int max)
+        {
+            SRow r = R("slider", label, key); r.Min = min; r.Max = max; return r;
+        }
+        SRow CB(string label, string key, string opts, string[] vals)
+        {
+            SRow r = R("combo", label, key);
+            r.Options = opts.Split(','); r.Tag = vals; return r;
+        }
+        SRow INFO(string text) { return R("info", text, null); }
+        SRow SEC(string text) { return R("section", text, null); }
+        SRow HK(string label, string key) { return R("hotkey", label, key); }
+
+        void BuildRows()
+        {
+            rows.Clear(); scroll = 0; popupRow = null; captureRow = null;
+            switch (section)
+            {
+                case "general":
+                    SEC("Основные параметры");
+                    T("Включить оверлей", "ov.enabled");
+                    T("Запускать вместе с Windows", "ov.autostart");
+                    T("Проверка при запуске", "ov.checkStart");
+                    T("Режим «Только игра»", "ov.onlyGame");
+                    CB("Интервал обновления", "ov.interval", "250 мс,500 мс,1 с,2 с,5 с", new string[] { "250", "500", "1000", "2000", "5000" });
+                    SEC("Единицы измерения");
+                    CB("Температура", "ov.tempUnit", "°C (Цельсий),°F (Фаренгейт)", new string[] { "C", "F" });
+                    CB("Частота", "ov.freqUnit", "ГГц,МГц", new string[] { "GHz", "MHz" });
+                    CB("Единицы памяти", "ov.memUnit", "ГБ,МБ", new string[] { "GB", "MB" });
+                    INFO("Исключения режима «только игра» помечаются из меню значка в трее, пока оверлей активен.");
+                    break;
+
+                case "pos":
+                    SEC("Положение оверлея");
+                    R("buttons", "", "pos.movebtn").Buttons = new string[] { "Переместить оверлей", "Сбросить положение" };
+                    CB("Привязка оверлея", "pos.mode", "Основной монитор,Ручное положение", new string[] { "pin", "manual" });
+                    T("Зафиксировать оверлей на мониторе", "pos.pin");
+                    string[] monOpts = new string[Screen.AllScreens.Length];
+                    string[] monVals = new string[Screen.AllScreens.Length];
+                    for (int i = 0; i < monOpts.Length; i++) { monOpts[i] = "Монитор " + (i + 1); monVals[i] = i.ToString(); }
+                    CB("Монитор", "pos.monitor", string.Join(",", monOpts), monVals);
+                    INFO("Зафиксированный оверлей стоит на выбранном мониторе. Перенести можно мышью — «Сбросить положение» снимает фиксацию.");
+                    CB("Позиция", "pos.corner", "Сверху справа,Сверху слева,Снизу справа,Снизу слева,По центру", new string[] { "TR", "TL", "BR", "BL", "C" });
+                    SL("Отступ X", "pos.offX", -100, 100);
+                    SL("Отступ Y", "pos.offY", -100, 100);
+                    SEC("Порядок блоков");
+                    AddOrderRows();
+                    break;
+
+                case "look":
+                    SEC("Форма и размер");
+                    CB("Режим оверлея", "look.mode", "Плавающий,Прижатый к позиции", new string[] { "float", "pin" });
+                    SL("Ширина оверлея", "look.width", 60, 200);
+                    SL("Масштаб окна", "look.scale", 60, 200);
+                    SL("Высота полосы («Строка»)", "look.rowH", 16, 40);
+                    SEC("Фон оверлея");
+                    SL("Прозрачность фона", "look.opacity", 0, 100);
+                    SL("Скругление", "look.radius", 0, 30);
+                    INFO("При 100% фон полностью исчезает — остаются только показатели и элементы оверлея. Скругление применяется сразу после «Применить».");
+                    SEC("Шрифты");
+                    string[] fams = FontFamilies();
+                    CB("Шрифт", "look.font", JoinNoComma(fams), fams);
+                    T("Применять шрифт и к окнам программы", "look.fontAll");
+                    SL("Размер шрифта", "look.fontSize", 60, 150);
+                    SEC("Элементы оверлея");
+                    T("Показывать время", "look.showTime");
+                    break;
+
+                case "keys":
+                    SEC("Глобальные горячие клавиши");
+                    HK("Показать / скрыть оверлей", "hk.show");
+                    HK("Сбросить статистику", "hk.reset");
+                    HK("Переключить режим оверлея", "hk.mode");
+                    HK("Открыть настройки", "hk.settings");
+                    HK("Начать / закончить замер", "hk.measure");
+                    INFO("Если сочетание занято другим приложением, после «Применить» оно просто не зарегистрируется.");
+                    INFO("Клик по полю клавиши — нажать новое сочетание, Esc — отменить ввод.");
+                    break;
+
+                case "fps":
+                    SEC("Отображать показатели");
+                    T("Показывать FPS", "fps.show");
+                    T("AVG", "fps.avg");
+                    T("1% Low", "fps.low1");
+                    T("0.1% Low", "fps.low01");
+                    T("Время кадра", "fps.lat");
+                    T("Процесс/окно", "fps.proc");
+                    T("API и разрешение", "fps.api");
+                    T("Скрывать показатели, если FPS = N/A", "fps.hideNa");
+                    INFO("FPS считается через Desktop Duplication — кадры, реально показываемые на мониторе активного окна. При VSync не превышает частоту обновления экрана. На статичном изображении счётчик молчит (нет новых кадров), блок при этом скрыт настройкой «Скрывать, если N/A». Предпросмотр всегда показывает демонстрационные значения FPS, чтобы было видно, как работают переключатели; реальный оверлей показывает FPS только тогда, когда он действительно считается (активна игра).");
+                    break;
+
+                case "gpu":
+                    SEC("Показатели");
+                    T("Показывать блок «Видеокарта»", "gpu.show");
+                    T("Загрузка", "gpu.load");
+                    T("Температура", "gpu.temp");
+                    T("Температура Hotspot", "gpu.hotspot");
+                    T("Температура памяти", "gpu.memtemp");
+                    T("Частота", "gpu.clock");
+                    T("Память GPU", "gpu.memclock");
+                    T("Напряжение", "gpu.volt");
+                    T("Потребление", "gpu.power");
+                    T("Обороты вент.", "gpu.fanrpm");
+                    T("Обороты вент. в %", "gpu.fanpct");
+                    T("Видеопамять", "gpu.vram");
+                    SEC("Пороги предупреждений");
+                    T("Цветовая индикация загрузки GPU", "gpu.loadcolor");
+                    SL("Температура предупреждения", "gpu.warn", 50, 95);
+                    SL("Температура критическая", "gpu.crit", 60, 110);
+                    break;
+
+                case "cpu":
+                    SEC("Показатели");
+                    T("Показывать блок «Процессор»", "cpu.show");
+                    T("Загрузка", "cpu.load");
+                    T("Температура", "cpu.temp");
+                    T("Температуры ядер", "cpu.ccd");
+                    T("Частота (макс.)", "cpu.clock");
+                    T("Эффективная частота", "cpu.eff");
+                    T("Потребление", "cpu.power");
+                    T("Обороты вент.", "cpu.fanrpm");
+                    T("Обороты вент. в %", "cpu.fanpct");
+                    SEC("Ядра");
+                    T("Частоты по ядрам", "cpu.corefreqs");
+                    T("График загрузки по ядрам", "cpu.coregraph");
+                    T("Подписи под графиком", "cpu.corelabels");
+                    SEC("Пороги предупреждений");
+                    T("Цветовая индикация загрузки CPU", "cpu.loadcolor");
+                    SL("Температура предупреждения", "cpu.warn", 50, 95);
+                    SL("Температура критическая", "cpu.crit", 60, 110);
+                    break;
+
+                case "ram":
+                    SEC("Основные параметры");
+                    T("Показывать блок ОЗУ", "ram.show");
+                    T("Использовано", "ram.used");
+                    T("Загрузка", "ram.load");
+                    T("Показывать скорость в мегагерцах", "ram.speed");
+                    CB("Источник частоты памяти", "ram.speedMode", "Авто (по данным системы),Авто+ (лимит контроллера CPU),Вручную", new string[] { "auto", "hw", "manual" });
+                    SL("Частота вручную, МГц", "ram.speedManual", 800, 8000);
+                    INFO("«Авто+» снижает SPD-номинал до лимита контроллера памяти процессора (по спецификации Intel) — на Xeon v4 с плашками 3200 покажет фактические 2400. «Вручную» — если хочешь задать число самому.");
+                    T("Температуры плашек ОЗУ", "ram.dimmt");
+                    CB("Формат памяти", "ram.format", "Использовано / всего,Только использовано,Проценты", new string[] { "usedtotal", "used", "pct" });
+                    break;
+
+                case "stat":
+                    SEC("Состав блока");
+                    T("Показывать блок статистики", "stat.show");
+                    T("Температура GPU", "stat.gput");
+                    T("Температура CPU", "stat.cput");
+                    T("Температура VRAM", "stat.vramt");
+                    T("Hotspot", "stat.hotspot");
+                    T("Напряжение GPU", "stat.gpuv");
+                    T("Потребление GPU", "stat.gpup");
+                    T("Потребление CPU", "stat.cpup");
+                    T("Автосброс при смене игры", "stat.autoreset");
+                    SEC("Текущая сессия");
+                    R("buttons", "", "stat.resetbtn").Buttons = new string[] { "Сбросить статистику" };
+                    break;
+
+                case "ftg":
+                    SEC("Основные параметры");
+                    T("Показывать график", "ft.show");
+                    SL("Высота", "ft.height", 40, 160);
+                    SL("Прозрачность заливки", "ft.fill", 0, 100);
+                    T("Показывать время кадра", "ft.showtime");
+                    INFO("График времени кадра появится, когда накопится достаточно замеров.");
+                    break;
+            }
+        }
+
+        void AddOrderRows()
+        {
+            string[] blocks = OrderList();
+            for (int i = 0; i < blocks.Length; i++)
+            {
+                SRow r = R("order", OrderName(blocks[i]), blocks[i].Trim());
+                r.OrderIndex = i;
+            }
+        }
+
+        string[] OrderList()
+        {
+            string o = draft.GetS("pos.order");
+            if (o.Length == 0) o = "fps,gpu,cpu,ram,stat,ftg";
+            return o.Split(',');
+        }
+
+        string OrderName(string b)
+        {
+            switch (b.Trim())
+            {
+                case "fps": return "FPS";
+                case "gpu": return "Видеокарта";
+                case "cpu": return "Процессор";
+                case "ram": return "ОЗУ";
+                case "stat": return "Статистика";
+                case "ftg": return "График времени кадра";
+            }
+            return b;
+        }
+
+        bool BlockShown(string b)
+        {
+            switch (b.Trim())
+            {
+                case "fps": return draft.GetB("fps.show");
+                case "gpu": return draft.GetB("gpu.show");
+                case "cpu": return draft.GetB("cpu.show");
+                case "ram": return draft.GetB("ram.show");
+                case "stat": return draft.GetB("stat.show");
+                case "ftg": return draft.GetB("ft.show");
+            }
+            return true;
+        }
+
+        static string JoinNoComma(string[] a)
+        {
+            List<string> clean = new List<string>();
+            foreach (string s in a) clean.Add(s.Replace(",", " "));
+            return string.Join(",", clean.ToArray());
+        }
+
+        static string[] FontFamilies()
+        {
+            List<string> names = new List<string>();
+            foreach (FontFamily ff in FontFamily.Families) names.Add(ff.Name);
+            if (!names.Contains("Segoe UI")) names.Insert(0, "Segoe UI");
+            return names.ToArray();
+        }
+
+        // ---------- значения ----------
+        string Val(SRow r)
+        {
+            string[] vals = r.Tag as string[];
+            if (r.Kind != "combo" || vals == null) return draft.GetS(r.Key);
+            string v = draft.GetS(r.Key);
+            for (int i = 0; i < vals.Length; i++)
+                if (vals[i] == v) return r.Options[i];
+            return r.Options.Length > 0 ? r.Options[0] : v;
+        }
+
+        void OpenCombo(SRow r)
+        {
+            string[] vals = r.Tag as string[];
+            if (vals == null || vals.Length == 0) return;
+            popupRow = r;
+            popupItems = r.Options;
+            popupScroll = 0;
+            string cur = draft.GetS(r.Key);
+            for (int i = 0; i < vals.Length; i++)
+                if (vals[i] == cur) { popupScroll = Math.Max(0, i - 5); break; }
+        }
+
+        void AfterChange()
+        {
+            RebuildPreview();
+            Invalidate();
+        }
+
+        // растягивание окна без рамки за края: нативный hit-test
+        protected override void WndProc(ref Message m)
+        {
+            const int WM_NCHITTEST = 0x0084;
+            if (m.Msg == WM_NCHITTEST && !maxed)
+            {
+                base.WndProc(ref m);
+                long lp = m.LParam.ToInt64();
+                int sx = (short)(lp & 0xFFFF);
+                int sy = (short)((lp >> 16) & 0xFFFF);
+                Point p = PointToClient(new Point(sx, sy));
+                int b = 7;
+                bool L = p.X >= 0 && p.X < b;
+                bool R = p.X >= ClientSize.Width - b && p.X < ClientSize.Width;
+                bool T = p.Y >= 0 && p.Y < b;
+                bool B = p.Y >= ClientSize.Height - b && p.Y < ClientSize.Height;
+                int code = 0;
+                if (T && L) code = 13;        // HTTOPLEFT
+                else if (T && R) code = 14;   // HTTOPRIGHT
+                else if (B && L) code = 16;   // HTBOTTOMLEFT
+                else if (B && R) code = 17;   // HTBOTTOMRIGHT
+                else if (L) code = 10;        // HTLEFT
+                else if (R) code = 11;        // HTRIGHT
+                else if (T) code = 12;        // HTTOP
+                else if (B) code = 15;        // HTBOTTOM
+                if (code != 0) m.Result = (IntPtr)code;
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        // ---------- превью ----------
+        static Snapshot FakeSnapshot()
+        {
+            return Monitor.MakeFake();
+        }
+
+        void SyncPreviewFps()
+        {
+            if (fake == null) return;
+            // Пока оверлей реально считает FPS (игра активна), превью показывает живые
+            // значения. Иначе подставляем демо-значения, чтобы блок FPS и его настройки
+            // были видны в предпросмотре.
+            if (owner.FpsLive)
+            {
+                Snapshot l = owner.Live;
+                fake.Fps = l.Fps;
+                fake.FpsAvg = l.FpsAvg;
+                fake.FpsLow1 = l.FpsLow1;
+                fake.FpsLow01 = l.FpsLow01;
+                fake.FpsLatency = l.FpsLatency;
+                fake.FgProc = l.FgProc;
+                fake.Resolution = l.Resolution;
+                fake.RenderApi = l.RenderApi;
+                fake.PresentMode = l.PresentMode;
+            }
+            else
+            {
+                // Вне игры реального FPS нет, но превью должно показывать, как выглядит
+                // блок и что меняют переключатели, поэтому берём демонстрационные значения.
+                Monitor.FillDemoFps(fake);
+            }
+        }
+
+        void RebuildPreview()
+        {
+            if (fake == null) fake = FakeSnapshot();
+            SyncPreviewFps();
+            for (int i = 0; i < 40; i++) fakeStats.Update(fake);
+            try
+            {
+                UpdatePreview();
+            }
+            catch (Exception ex)
+            {
+                try { File.AppendAllText(Monitor.LogPath("error.txt"), DateTime.Now + " preview: " + ex + "\r\n"); } catch { }
+            }
+        }
+
+        void UpdatePreview()
+        {
+            if (fake == null) fake = FakeSnapshot();
+            if (prev == null || prev.IsDisposed)
+            {
+                prev = new PreviewControl();
+                Controls.Add(prev);
+            }
+            prev.St = draft;
+            prev.Snap = fake;
+            prev.Stat = fakeStats;
+            // сначала размер/позиция, потом перерисовка
+            float sc = PreviewControl.CalcScale(draft, PreviewW - 16);
+            Size need = PreviewControl.MeasureSize(draft, fake, fakeStats, sc);
+            int maxH = Math.Max(120, Height - TopH() - BottomH() - 80);
+            if (need.Height > maxH)
+            {
+                sc = Math.Max(0.15f, sc * maxH / (float)need.Height);
+                need = PreviewControl.MeasureSize(draft, fake, fakeStats, sc);
+            }
+            prev.ScaleF = sc;
+            prev.Size = need;
+            LayoutPreview();
+            prev.Invalidate();
+            prev.BringToFront();
+        }
+
+        void ToggleMax()
+        {
+            if (!maxed)
+            {
+                restoreBounds = new Rectangle(Location, Size);
+                Screen scr = Screen.FromControl(this);
+                Rectangle wa = scr.WorkingArea;
+                Location = wa.Location;
+                Size = wa.Size;
+                maxed = true;
+            }
+            else
+            {
+                Location = restoreBounds.Location;
+                Size = restoreBounds.Size;
+                maxed = false;
+            }
+            LayoutPreview();
+            Invalidate();
+        }
+
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        {
+            if (e.Y < TopH() && e.X < Width - 90 && !maxRect.Contains(e.Location) && !closeRect.Contains(e.Location))
+            {
+                ToggleMax();
+                return;
+            }
+            base.OnMouseDoubleClick(e);
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            LayoutPreview();
+            Invalidate();
+        }
+
+        bool PreviewOn() { return Width >= 1100; }
+
+        void LayoutPreview()
+        {
+            if (prev == null || prev.IsDisposed) return;
+            prev.Visible = PreviewOn();
+            if (!prev.Visible) return;
+            int px = Width - PreviewPanelW() + 10;
+            int x = px + (PreviewW - prev.Width) / 2;
+            if (x < px) x = px;
+            int boxBottom = Height - BottomH() - 24;
+            int y = TopH() + 50;
+            if (y + prev.Height > boxBottom) y = Math.Max(TopH() + 50, boxBottom - prev.Height);
+            prev.Location = new Point(x, y);
+        }
+
+        void StartPreviewAnimation()
+        {
+            anim = new Timer();
+            anim.Interval = 900;
+            anim.Tick += delegate
+            {
+                if (prev == null || !Visible) return;
+                fake.CpuLoad = 5 + rnd.Next(80);
+                fake.GpuLoad = 10 + rnd.Next(75);
+                SyncPreviewFps();
+                // вне игры слегка «оживляем» демо-FPS, чтобы было видно формат строк
+                if (!owner.FpsLive) fake.Fps = 120 + rnd.Next(60);
+                fake.CpuFreq = 2600 + rnd.Next(700);
+                fake.CpuEffFreq = fake.CpuFreq * fake.CpuLoad.Value / 100.0;
+                fake.CpuPower = 15 + rnd.Next(300) / 10.0;
+                for (int i = 0; i < fake.ThreadLoads.Count; i++)
+                    fake.ThreadLoads[i] = rnd.Next(100) < 35 ? rnd.Next(100) : rnd.Next(12);
+                for (int i = 0; i < fake.CoreFreqs.Count; i++)
+                    fake.CoreFreqs[i] = 2600 + rnd.Next(700);
+                fake.RamPct = 40 + rnd.Next(12);
+                fake.RamUsedGb = fake.RamTotalGb * fake.RamPct / 100.0;
+                fakeStats.Update(fake);
+                prev.Invalidate();
+            };
+            anim.Start();
+        }
+
+        // ---------- layout ----------
+        int NavW() { return 190; }
+        int TopH() { return 48; }
+        int BottomH() { return 44; }
+        int PreviewPanelW() { return PreviewOn() ? PreviewW + 40 : 0; }
+        Rectangle ContentRect()
+        {
+            return new Rectangle(NavW() + 20, TopH() + 8, Width - NavW() - 20 - PreviewPanelW() - 30, Height - TopH() - BottomH() - 16);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.Clear(WBack);
+            DrawTopBar(g);
+            DrawNav(g);
+            DrawRows(g);
+            DrawPreview(g);
+            DrawBottom(g);
+            if (popupRow != null) DrawPopup(g);
+        }
+
+        static string VersionLabel()
+        {
+            try
+            {
+                Version v = typeof(SettingsForm).Assembly.GetName().Version;
+                return "v " + v.Major + "." + v.Minor + "." + Math.Max(0, v.Build);
+            }
+            catch { return "v 1.1.0"; }
+        }
+
+        void DrawTopBar(Graphics g)
+        {
+            using (Brush b = new SolidBrush(NavBack)) g.FillRectangle(b, 0, 0, Width, TopH());
+            using (Brush b = new SolidBrush(Acc)) g.DrawString("K2", fTitle, b, 16, 14);
+            SizeF szK = g.MeasureString("K2", fTitle);
+            Rectangle chip = new Rectangle((int)(16 + szK.Width + 12), 14, 52, 22);
+            using (Pen p = new Pen(CtlBorder)) g.DrawRectangle(p, chip);
+            using (Brush b = new SolidBrush(NavDim)) g.DrawString(VersionLabel(), fSmall, b, chip.Left + 7, chip.Top + 4);
+            using (Brush b = new SolidBrush(NavDim))
+                g.DrawString(" / Настройки / " + SectionTitle(section), fBread, b, chip.Right + 10, 16);
+            RectangleF mrect = maxed ? new RectangleF(Width - 78, 12, 28, 24) : new RectangleF(Width - 78, 12, 28, 24);
+            maxRect = mrect;
+            using (Brush b = new SolidBrush(NavDim))
+                g.DrawString(maxed ? "❐" : "▢", fClose, b, mrect.X - 3, mrect.Y);
+            closeRect = new RectangleF(Width - 40, 12, 28, 24);
+            using (Brush b = new SolidBrush(NavText)) g.DrawString("✕", fClose, b, closeRect.X - 4, closeRect.Y);
+        }
+
+        string SectionTitle(string sec)
+        {
+            for (int i = 0; i < SectionNames.Length; i++) if (SectionNames[i] == sec) return SectionTitles[i];
+            return sec;
+        }
+
+        void DrawNav(Graphics g)
+        {
+            using (Brush b = new SolidBrush(NavBack)) g.FillRectangle(b, 0, TopH(), NavW(), Height - TopH());
+            int y = TopH() + 16;
+            y = NavGroup(g, y, "ОВЕРЛЕЙ", new string[] { "general", "pos", "look", "keys" });
+            y = NavGroup(g, y, "ПОКАЗАТЕЛИ", new string[] { "fps", "gpu", "cpu", "ram", "stat", "ftg" });
+
+            // Ссылка «Автору на кофе» — сразу под пунктом «График времени кадра».
+            rectCoffee = new Rectangle(6, y + 4, NavW() - 12, 26);
+            using (Brush b = new SolidBrush(Acc))
+                g.DrawString("☕ Автору на кофе", fNav, b, rectCoffee.X + 12, rectCoffee.Y + 5);
+            SizeF cs = g.MeasureString("☕ Автору на кофе", fNav);
+            using (Pen p = new Pen(Color.FromArgb(150, Acc)))
+                g.DrawLine(p, rectCoffee.X + 12, rectCoffee.Y + 7 + cs.Height,
+                    rectCoffee.X + 12 + cs.Width, rectCoffee.Y + 7 + cs.Height);
+
+            using (Brush b = new SolidBrush(Acc))
+                g.DrawString("by Jash/K2", fSmall, b, 16, Height - 106);
+
+            rectExport = new Rectangle(10, Height - 88, 54, 30);
+            rectImport = new Rectangle(68, Height - 88, 54, 30);
+            rectReset = new Rectangle(126, Height - 88, 54, 30);
+            FooterBtn(g, rectExport, "Экспорт");
+            FooterBtn(g, rectImport, "Импорт");
+            FooterBtn(g, rectReset, "Сброс");
+        }
+
+        int NavGroup(Graphics g, int y, string cat, string[] items)
+        {
+            bool compact = Height < 700;
+            int step = compact ? 30 : 38;
+            int itemH = compact ? 26 : 34;
+            using (Brush b = new SolidBrush(NavDim)) g.DrawString(cat, fNavCat, b, 16, y);
+            y += compact ? 18 : 22;
+            for (int i = 0; i < items.Length; i++)
+            {
+                Rectangle r = new Rectangle(6, y, NavW() - 12, itemH);
+                bool sel = section == items[i];
+                if (sel) { using (Brush b = new SolidBrush(NavSel)) FillRound(g, r, 6, b); }
+                using (Brush b = new SolidBrush(sel ? NavText : Color.FromArgb(190, 202, 214)))
+                    g.DrawString(SectionTitle(items[i]), fNav, b, r.X + 12, r.Y + (compact ? 4 : 8));
+                y += step;
+            }
+            y += compact ? 4 : 10;
+            return y;
+        }
+
+        void FooterBtn(Graphics g, Rectangle r, string text)
+        {
+            using (Brush b = new SolidBrush(CtlBack)) FillRound(g, r, 6, b);
+            using (Pen p = new Pen(CtlBorder)) DrawRound(g, p, r, 6);
+            TextRenderer.DrawText(g, text, fValue, r, NavText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+
+        void DrawRows(Graphics g)
+        {
+            Rectangle cr = ContentRect();
+            g.SetClip(cr);
+            int y = cr.Top - scroll;
+            foreach (SRow r in rows)
+            {
+                if (r.Kind == "section")
+                {
+                    y += 14;
+                    r.Rect = new Rectangle(cr.X, y, cr.Width, 24);
+                    if (y + 24 > cr.Top && y < cr.Bottom)
+                        using (Brush b = new SolidBrush(NavDim))
+                            g.DrawString(r.Label.ToUpper(Ru), fNavCat, b, cr.X + 4, y);
+                    y += 28;
+                    continue;
+                }
+                int rh = 48;
+                if (r.Kind == "info")
+                {
+                    SizeF ts = g.MeasureString(r.Label, fSmall, new SizeF(cr.Width - 8, 400));
+                    rh = (int)ts.Height + 8;
+                    if (rh < 24) rh = 24;
+                }
+                r.Rect = new Rectangle(cr.X, y, cr.Width, rh);
+                if (y + rh > cr.Top && y < cr.Bottom)
+                {
+                    if (r.Kind == "info")
+                    {
+                        using (Brush b = new SolidBrush(NavDim))
+                        {
+                            StringFormat sf = new StringFormat();
+                            sf.LineAlignment = StringAlignment.Near;
+                            g.DrawString(r.Label, fSmall, b, new RectangleF(cr.X + 4, y + 6, cr.Width - 8, rh), sf);
+                        }
+                    }
+                    else if (r.Kind == "buttons")
+                    {
+                        int bx = cr.X + 4;
+                        List<Rectangle> bs = new List<Rectangle>();
+                        foreach (string bt in r.Buttons)
+                        {
+                            SizeF s2 = g.MeasureString(bt, fValue);
+                            Rectangle b2 = new Rectangle(bx, y + 8, (int)s2.Width + 28, 32);
+                            bs.Add(b2);
+                            FooterBtn(g, b2, bt);
+                            bx += b2.Width + 12;
+                        }
+                        r.Tag = bs;
+                    }
+                    else if (r.Kind == "order")
+                    {
+                        OrderRowPaint(g, r, cr, y);
+                    }
+                    else
+                    {
+                        using (Brush b = new SolidBrush(NavText))
+                            g.DrawString(r.Label, fLabel, b, cr.X + 4, y + 14);
+                        PaintCtl(g, r, new Rectangle(cr.Right - 250, y + 8, 246, 32));
+                    }
+                }
+                y += rh + 6;
+                using (Pen p = new Pen(LineC)) g.DrawLine(p, cr.X + 4, y, cr.Right - 4, y);
+            }
+            y += 10;
+            scrollMax = Math.Max(0, (y + scroll) - cr.Height);
+            g.ResetClip();
+        }
+
+        void OrderRowPaint(Graphics g, SRow r, Rectangle cr, int y)
+        {
+            bool shown = BlockShown(r.Key);
+            Color tc = shown ? NavText : Color.FromArgb(110, 124, 140);
+            using (Brush b = new SolidBrush(NavDim))
+                g.DrawString((r.OrderIndex + 1).ToString("00"), fValue, b, cr.X + 10, y + 12);
+            using (Brush b = new SolidBrush(tc))
+                g.DrawString(OrderName(r.Key), fLabel, b, cr.X + 44, y + 12);
+            Rectangle up = new Rectangle(cr.Right - 88, y + 6, 36, 36);
+            Rectangle dn = new Rectangle(cr.Right - 46, y + 6, 36, 36);
+            r.Ctl = up;
+            r.Tag = dn;
+            ArrowBtn(g, up, true);
+            ArrowBtn(g, dn, false);
+        }
+
+        void ArrowBtn(Graphics g, Rectangle r, bool up)
+        {
+            using (Brush b = new SolidBrush(CtlBack)) FillRound(g, r, 6, b);
+            using (Pen p = new Pen(CtlBorder)) DrawRound(g, p, r, 6);
+            using (Brush br = new SolidBrush(NavText))
+            {
+                PointF tip = new PointF(r.X + r.Width / 2f, up ? r.Y + 10 : r.Y + r.Height - 10);
+                PointF a = new PointF(tip.X - 7, up ? tip.Y + 10 : tip.Y - 10);
+                PointF b2 = new PointF(tip.X + 7, a.Y);
+                g.FillPolygon(br, new PointF[] { tip, a, b2 });
+            }
+        }
+
+        void PaintCtl(Graphics g, SRow r, Rectangle area)
+        {
+            r.Ctl = area;
+            switch (r.Kind)
+            {
+                case "toggle":
+                    DrawToggle(g, area, draft.GetB(r.Key));
+                    break;
+                case "slider":
+                {
+                    Rectangle track = new Rectangle(area.X, area.Y + 10, 160, 12);
+                    Rectangle valBox = new Rectangle(area.Right - 76, area.Y, 76, 32);
+                    int v = draft.GetI(r.Key);
+                    using (Brush b = new SolidBrush(CtlBack)) FillRound(g, track, 6, b);
+                    float f = (v - r.Min) / (float)(r.Max - r.Min);
+                    Rectangle fill = new Rectangle(track.X, track.Y, Math.Max(6, (int)(track.Width * f)), track.Height);
+                    using (Brush b = new SolidBrush(Acc)) FillRound(g, fill, 6, b);
+                    using (Brush b = new SolidBrush(Color.White))
+                        g.FillEllipse(b, track.X + fill.Width - 8, track.Y - 2, 16, 16);
+                    using (Brush b = new SolidBrush(CtlBack)) FillRound(g, valBox, 6, b);
+                    using (Pen p = new Pen(CtlBorder)) DrawRound(g, p, valBox, 6);
+                    TextRenderer.DrawText(g, SliderText(r, v), fValue, valBox, NavText,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    r.Tag = track;
+                    break;
+                }
+                case "combo":
+                {
+                    using (Brush b = new SolidBrush(CtlBack)) FillRound(g, area, 6, b);
+                    using (Pen p = new Pen(CtlBorder)) DrawRound(g, p, area, 6);
+                    string txt = Val(r);
+                    TextRenderer.DrawText(g, txt, fValue, new Rectangle(area.X + 8, area.Y, area.Width - 30, area.Height),
+                        NavText, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                    using (Brush br = new SolidBrush(NavDim))
+                    {
+                        PointF a = new PointF(area.Right - 18, area.Y + 13);
+                        g.FillPolygon(br, new PointF[] { new PointF(a.X - 6, a.Y), new PointF(a.X + 6, a.Y), new PointF(a.X, a.Y + 7) });
+                    }
+                    break;
+                }
+                case "hotkey":
+                {
+                    string spec = draft.GetS(r.Key);
+                    bool en = spec.Length > 0 && !spec.StartsWith("-");
+                    Rectangle tog = new Rectangle(area.X, area.Y + 4, 44, 24);
+                    DrawToggleSmall(g, tog, en);
+                    string txt = captureRow == r ? "нажмите клавиши…" : HotkeyDisplay(spec);
+                    Rectangle kb = new Rectangle(area.X + 54, area.Y, area.Width - 54, 32);
+                    using (Brush b = new SolidBrush(captureRow == r ? AccDim : CtlBack)) FillRound(g, kb, 6, b);
+                    using (Pen p = new Pen(captureRow == r ? Acc : CtlBorder)) DrawRound(g, p, kb, 6);
+                    TextRenderer.DrawText(g, txt, fValue, new Rectangle(kb.X + 10, kb.Y, kb.Width - 20, kb.Height),
+                        NavText, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                    r.Ctl = kb;
+                    break;
+                }
+            }
+        }
+
+        string SliderText(SRow r, int v)
+        {
+            switch (r.Key)
+            {
+                case "look.width":
+                case "look.scale":
+                case "look.opacity":
+                case "look.fontSize":
+                case "ft.fill": return v + "%";
+                default: return v.ToString(Ru);
+            }
+        }
+
+        string HotkeyDisplay(string spec)
+        {
+            if (spec.Length == 0 || spec.StartsWith("-")) return "—";
+            string[] p = spec.TrimStart('+').Split('+');
+            List<string> mods = new List<string>();
+            string key = "";
+            foreach (string x0 in p)
+            {
+                string x = x0.Trim();
+                if (x == "Ctrl") mods.Add("Ctrl");
+                else if (x == "Alt") mods.Add("Alt");
+                else if (x == "Shift") mods.Add("Shift");
+                else if (x == "Win") mods.Add("Win");
+                else if (x.Length > 0) key = x;
+            }
+            string m = string.Join(" + ", mods.ToArray());
+            return (m.Length > 0 ? m + " + " : "") + key;
+        }
+
+        void DrawToggle(Graphics g, Rectangle area, bool on)
+        {
+            Rectangle pill = new Rectangle(area.Right - 60, area.Y + 4, 56, 24);
+            DrawToggleSmall(g, pill, on);
+        }
+
+        void DrawToggleSmall(Graphics g, Rectangle pill, bool on)
+        {
+            using (Brush b = new SolidBrush(on ? Acc : OffC)) FillRound(g, pill, pill.Height / 2, b);
+            int d = pill.Height - 6;
+            int cx2 = on ? pill.Right - d - 3 : pill.X + 3;
+            using (Brush b = new SolidBrush(Color.White))
+                g.FillEllipse(b, cx2, pill.Y + 3, d, d);
+        }
+
+        void DrawPreview(Graphics g)
+        {
+            if (!PreviewOn()) return;
+            int px = Width - PreviewPanelW() + 10;
+            using (Brush b = new SolidBrush(NavDim))
+                g.DrawString(owner.FpsLive ? "ПРЕДПРОСМОТР" : "ПРЕДПРОСМОТР · ДЕМО", fNavCat, b, px, TopH() + 16);
+            Rectangle box = new Rectangle(px, TopH() + 44, PreviewW, Height - TopH() - BottomH() - 64);
+            using (Pen p = new Pen(LineC)) DrawRound(g, p, box, 10);
+        }
+
+        void DrawBottom(Graphics g)
+        {
+            Rectangle bar = new Rectangle(0, Height - BottomH(), Width, BottomH());
+            using (Brush b = new SolidBrush(NavBack)) g.FillRectangle(b, bar);
+            int diff = owner.St.DiffCount(draft);
+            using (Brush br = new SolidBrush(diff > 0 ? WarnText : NavDim))
+                g.DrawString("Изменено " + diff, fValue, br, 16, bar.Y + 13);
+            using (Brush br = new SolidBrush(NavDim))
+            {
+                g.DrawString("Esc — отмена    Ctrl+S — применить", fSmall, br, 160, bar.Y + 15);
+                // при узком окне правая подпись наезжает на кнопки — не рисуем её
+                if (Width >= 1180) g.DrawString("K2 — настройки оверлея", fSmall, br, 440, bar.Y + 15);
+            }
+            rectCancel = new Rectangle(Width - 470, bar.Y + 6, 110, 32);
+            rectApply = new Rectangle(Width - 350, bar.Y + 6, 140, 32);
+            rectApplyClose = new Rectangle(Width - 200, bar.Y + 6, 184, 32);
+            FooterBtn(g, rectCancel, "Отмена");
+            // «Применить» — применяет, оставляя окно открытым
+            using (Brush b = new SolidBrush(diff > 0 ? AccDim : CtlBack)) FillRound(g, rectApply, 6, b);
+            using (Pen p = new Pen(diff > 0 ? Acc : CtlBorder)) DrawRound(g, p, rectApply, 6);
+            TextRenderer.DrawText(g, "Применить", fValue, rectApply,
+                diff > 0 ? Color.White : Color.FromArgb(110, 130, 128),
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            // «Применить и закрыть» — основная кнопка
+            using (Brush b = new SolidBrush(diff > 0 ? Acc : AccDim)) FillRound(g, rectApplyClose, 6, b);
+            TextRenderer.DrawText(g, "Применить и закрыть", fValue, rectApplyClose,
+                diff > 0 ? Color.FromArgb(4, 22, 20) : Color.FromArgb(110, 130, 128),
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+
+        void DrawPopup(Graphics g)
+        {
+            popupHits.Clear();
+            popupHitIdx.Clear();
+            int itemH = 28;
+            int total = popupItems.Length;
+            if (total == 0) return;
+
+            int belowTop = popupRow.Ctl.Bottom;
+            int spaceBelow = Height - BottomH() - 6 - belowTop;
+            int spaceAbove = popupRow.Ctl.Top - TopH() - 6;
+            // у нижнего края список раскрывается вверх, чтобы все пункты были доступны
+            bool up = spaceBelow < Math.Min(total, 6) * itemH && spaceAbove > spaceBelow;
+            int space = Math.Max(0, (up ? spaceAbove : spaceBelow) - 8);
+            int visible = Math.Min(total, Math.Max(1, space / itemH));
+            int maxScroll = Math.Max(0, total - visible);
+            if (popupScroll < 0) popupScroll = 0;
+            if (popupScroll > maxScroll) popupScroll = maxScroll;
+
+            int h = itemH * visible + 8;
+            int top = up ? popupRow.Ctl.Top - h : belowTop;
+            if (top < TopH() + 4) top = TopH() + 4;
+            Rectangle pr = new Rectangle(popupRow.Ctl.X, top, popupRow.Ctl.Width, h);
+            using (Brush b = new SolidBrush(NavSel)) FillRound(g, pr, 6, b);
+            using (Pen p = new Pen(CtlBorder)) DrawRound(g, p, pr, 6);
+
+            string[] vals = popupRow.Tag as string[];
+            string sel = draft.GetS(popupRow.Key);
+            for (int i = 0; i < visible; i++)
+            {
+                int idx = i + popupScroll;
+                Rectangle ir = new Rectangle(pr.X + 4, pr.Y + 4 + i * itemH, pr.Width - 14, itemH);
+                bool cur2 = vals != null && idx < vals.Length && vals[idx] == sel;
+                if (cur2) { using (Brush b = new SolidBrush(AccDim)) FillRound(g, ir, 4, b); }
+                TextRenderer.DrawText(g, popupItems[idx], fValue, ir, cur2 ? Color.White : NavText,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.PathEllipsis);
+                popupHits.Add(ir);
+                popupHitIdx.Add(idx);
+            }
+
+            // индикатор прокрутки
+            if (total > visible)
+            {
+                int trackX = pr.Right - 7;
+                int trackH = pr.Height - 10;
+                int thumbH = Math.Max(18, trackH * visible / total);
+                int thumbY = pr.Y + 5 + (trackH - thumbH) * popupScroll / Math.Max(1, maxScroll);
+                using (Brush b = new SolidBrush(CtlBorder))
+                {
+                    g.FillRectangle(b, trackX, pr.Y + 5, 2, trackH);
+                    g.FillRectangle(b, trackX - 1, thumbY, 4, thumbH);
+                }
+            }
+            popupRect = pr;
+        }
+
+        static GraphicsPath Round(Rectangle r, int rad)
+        {
+            GraphicsPath p = new GraphicsPath();
+            int d = rad * 2;
+            if (d <= 1) { p.AddRectangle(r); p.CloseFigure(); return p; }
+            p.AddArc(r.X, r.Y, d, d, 180, 90);
+            p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
+        static void FillRound(Graphics g, Rectangle r, int rad, Brush b)
+        {
+            using (GraphicsPath p = Round(r, rad)) g.FillPath(b, p);
+        }
+
+        static void DrawRound(Graphics g, Pen p, Rectangle r, int rad)
+        {
+            using (GraphicsPath pp = Round(r, rad)) g.DrawPath(p, pp);
+        }
+
+        // ---------- interaction ----------
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left) return;
+
+            if (closeRect.Contains(e.Location) || rectCancel.Contains(e.Location)) { Close(); return; }
+            if (maxRect.Contains(e.Location)) { ToggleMax(); return; }
+            if (rectApply.Contains(e.Location)) { ApplyNow(); return; }
+            if (rectApplyClose.Contains(e.Location)) { ApplyNow(); Close(); return; }
+            if (rectExport.Contains(e.Location)) { ExportNow(); return; }
+            if (rectImport.Contains(e.Location)) { ImportNow(); return; }
+            if (rectReset.Contains(e.Location)) { draft = new Settings(); BuildRows(); AfterChange(); return; }
+
+            if (e.Y < TopH()) { topDrag = true; topDragOff = e.Location; return; }
+
+            if (popupRow != null)
+            {
+                for (int i = 0; i < popupHits.Count; i++)
+                {
+                    if (popupHits[i].Contains(e.Location))
+                    {
+                        string[] vals = popupRow.Tag as string[];
+                        int idx = i < popupHitIdx.Count ? popupHitIdx[i] : i;
+                        if (vals != null && idx < vals.Length)
+                        {
+                            draft.Set(popupRow.Key, vals[idx]);
+                            if (popupRow.Key == "look.font" && draft.GetB("look.fontAll"))
+                                Font = new Font(draft.GetS("look.font"), 9.75f);
+                        }
+                        popupRow = null;
+                        popupHits.Clear();
+                        AfterChange();
+                        return;
+                    }
+                }
+                if (!popupRect.Contains(e.Location)) { popupRow = null; popupHits.Clear(); Invalidate(); }
+                return;
+            }
+
+            if (e.X < NavW())
+            {
+                if (rectCoffee.Contains(e.Location)) { OpenUrl(CoffeeUrl); return; }
+                string sec = NavAt(e.Y);
+                if (sec != null && sec != section) { section = sec; BuildRows(); AfterChange(); }
+                return;
+            }
+
+            foreach (SRow r in rows)
+            {
+                if (!r.Rect.Contains(e.Location)) continue;
+                switch (r.Kind)
+                {
+                    case "toggle":
+                        if (r.Ctl.Contains(e.Location)) { draft.Set(r.Key, !draft.GetB(r.Key)); AfterChange(); }
+                        break;
+                    case "slider":
+                        dragRow = r;
+                        SetSlider(r, e.X);
+                        break;
+                    case "combo":
+                        OpenCombo(r);
+                        Invalidate();
+                        break;
+                    case "hotkey":
+                        if (r.Ctl.Contains(e.Location)) { captureRow = r; Invalidate(); }
+                        else
+                        {
+                            Rectangle tog = new Rectangle(r.Ctl.X - 54, r.Ctl.Y + 4, 44, 24);
+                            if (tog.Contains(e.Location))
+                            {
+                                string sp = draft.GetS(r.Key);
+                                if (sp.Length == 0) sp = "+Alt+F12";
+                                draft.Set(r.Key, sp.StartsWith("-") ? sp.Substring(1) : "-" + sp);
+                                AfterChange();
+                            }
+                        }
+                        break;
+                    case "buttons":
+                    {
+                        List<Rectangle> bs = r.Tag as List<Rectangle>;
+                        if (bs != null)
+                            for (int i = 0; i < bs.Count; i++)
+                                if (bs[i].Contains(e.Location)) { DoButton(r, i); return; }
+                        break;
+                    }
+                    case "order":
+                    {
+                        object t = r.Tag;
+                        Rectangle dn = (t is Rectangle) ? (Rectangle)t : Rectangle.Empty;
+                        if (r.Ctl.Contains(e.Location)) MoveOrder(r.OrderIndex, -1);
+                        else if (dn.Width > 0 && dn.Contains(e.Location)) MoveOrder(r.OrderIndex, 1);
+                        break;
+                    }
+                }
+                return;
+            }
+        }
+
+        void SetSlider(SRow r, int mouseX)
+        {
+            object t = r.Tag;
+            if (!(t is Rectangle)) return;
+            Rectangle track = (Rectangle)t;
+            if (track.Width <= 0) return;
+            float f = (mouseX - track.X) / (float)track.Width;
+            f = Math.Max(0, Math.Min(1, f));
+            int v = r.Min + (int)Math.Round(f * (r.Max - r.Min));
+            draft.Set(r.Key, v);
+            AfterChange();
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (topDrag)
+            {
+                Point gp = Cursor.Position;
+                Location = new Point(gp.X - topDragOff.X, gp.Y - topDragOff.Y);
+                return;
+            }
+            if (dragRow != null) SetSlider(dragRow, e.X);
+
+            Cursor = rectCoffee.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            dragRow = null;
+            topDrag = false;
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            if (popupRow != null)
+            {
+                popupScroll -= Math.Sign(e.Delta) * 3;
+                Invalidate();
+                return;
+            }
+            scroll = Math.Max(0, Math.Min(scrollMax, scroll - e.Delta / 2));
+            Invalidate();
+        }
+
+        string NavAt(int y)
+        {
+            bool compact = Height < 700;
+            int step = compact ? 30 : 38;
+            int itemH = compact ? 26 : 34;
+            int yy = TopH() + 16 + (compact ? 18 : 22);
+            string[] grp1 = new string[] { "general", "pos", "look", "keys" };
+            foreach (string s in grp1) { if (y >= yy && y < yy + itemH) return s; yy += step; }
+            yy += (compact ? 4 : 10) + (compact ? 18 : 22);
+            string[] grp2 = new string[] { "fps", "gpu", "cpu", "ram", "stat", "ftg" };
+            foreach (string s in grp2) { if (y >= yy && y < yy + itemH) return s; yy += step; }
+            return null;
+        }
+
+        void MoveOrder(int idx, int dir)
+        {
+            List<string> list = new List<string>(OrderList());
+            int to = idx + dir;
+            if (to < 0 || to >= list.Count) return;
+            string tmp = list[idx]; list[idx] = list[to]; list[to] = tmp;
+            draft.Set("pos.order", string.Join(",", list.ToArray()));
+            BuildRows();
+            AfterChange();
+        }
+
+        void OpenUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return;
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Не удалось открыть ссылку: " + ex.Message, "K2");
+            }
+        }
+
+        void DoButton(SRow r, int which)
+        {
+            if (r.Key == "pos.movebtn")
+            {
+                if (which == 0)
+                {
+                    owner.Visible = true;
+                    owner.TopMost = false; owner.TopMost = true;
+                    owner.Invalidate();
+                }
+                else
+                {
+                    try { File.Delete(Monitor.LogPath("pos.txt")); } catch { }
+                    draft.Set("pos.pin", false);
+                    draft.Set("pos.mode", "corner");
+                    owner.ApplySettings(draft.Clone());
+                    BuildRows();
+                }
+            }
+            else if (r.Key == "stat.resetbtn")
+            {
+                owner.ResetSession();
+            }
+        }
+
+        void ApplyNow()
+        {
+            owner.ApplySettings(draft.Clone());
+            Invalidate();
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode == Keys.Escape)
+            {
+                if (captureRow != null) { captureRow = null; Invalidate(); return; }
+                if (popupRow != null) { popupRow = null; Invalidate(); return; }
+                Close();
+                return;
+            }
+            if (e.Control && e.KeyCode == Keys.S) { ApplyNow(); return; }
+            if (captureRow != null)
+            {
+                bool ctrl = (e.Modifiers & Keys.Control) != 0;
+                bool alt = (e.Modifiers & Keys.Alt) != 0;
+                bool shift = (e.Modifiers & Keys.Shift) != 0;
+                Keys key = e.KeyCode;
+                if (key == Keys.None) return;
+                e.SuppressKeyPress = true;
+                string spec = "+";
+                if (ctrl) spec += "Ctrl+";
+                if (alt) spec += "Alt+";
+                if (shift) spec += "Shift+";
+                spec += new KeysConverter().ConvertToString(key);
+                draft.Set(captureRow.Key, spec);
+                captureRow = null;
+                AfterChange();
+            }
+        }
+
+        void ExportNow()
+        {
+            using (SaveFileDialog d = new SaveFileDialog())
+            {
+                d.Filter = "K2 настройки (*.ini)|*.ini";
+                d.FileName = "k2-settings.ini";
+                if (d.ShowDialog(this) == DialogResult.OK)
+                    try { draft.Save2(d.FileName); } catch { }
+            }
+        }
+
+        void ImportNow()
+        {
+            using (OpenFileDialog d = new OpenFileDialog())
+            {
+                d.Filter = "K2 настройки (*.ini)|*.ini";
+                if (d.ShowDialog(this) == DialogResult.OK)
+                {
+                    try { draft = Settings.LoadFile(d.FileName); }
+                    catch (Exception ex) { MessageBox.Show(this, "Не удалось загрузить файл: " + ex.Message, "K2"); return; }
+                    BuildRows();
+                    AfterChange();
+                }
+            }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (anim != null) { anim.Stop(); anim.Dispose(); anim = null; }
+            base.OnFormClosing(e);
+        }
+    }
+}
