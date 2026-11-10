@@ -202,8 +202,14 @@ namespace K2
         NotifyIcon tray;
         ContextMenuStrip menu;
         ToolStripMenuItem miInterval;
+        ToolStripMenuItem miEdit;
         bool dragging;
         Point dragStart;
+        bool editMode;
+        bool resizing;
+        int resizeEdge;
+        Rectangle resizeStartBounds;
+        Point resizeStartMouse;
         ToolTip tip = new ToolTip();
         bool hiddenByUser;               // скрыто хоткеем/треем
         bool startChecked;               // «проверка при запуске» выполнена
@@ -240,6 +246,7 @@ namespace K2
             ApplyTransparencyKey();
             ApplyWindowSize();
             LoadPos();
+            if (RememberMonitor()) St.Save();
             Monitor.LogCleanup();
             BuildTray();
             ContextMenuStrip = menu;
@@ -378,9 +385,19 @@ namespace K2
             fresh.Normalize();
             SanitizeGameLists(fresh);
             string oldMode = St.GetS("pos.mode");
-            bool modeChanged = oldMode != fresh.GetS("pos.mode");
-            bool manual = fresh.GetS("pos.mode") == "manual";
+            bool posChanged =
+                oldMode != fresh.GetS("pos.mode") ||
+                St.GetS("pos.monitor") != fresh.GetS("pos.monitor") ||
+                St.GetS("pos.corner") != fresh.GetS("pos.corner") ||
+                St.GetI("pos.offX") != fresh.GetI("pos.offX") ||
+                St.GetI("pos.offY") != fresh.GetI("pos.offY") ||
+                St.GetB("pos.pin") != fresh.GetB("pos.pin");
             St = fresh;
+            // Окно настроек могло быть открыто до перемещения/ресайза оверлея.
+            // В этом случае не возвращаем его в угол из устаревшего черновика.
+            if (oldMode == "manual" && !posChanged) St.Set("pos.mode", "manual");
+            bool modeChanged = oldMode != St.GetS("pos.mode");
+            bool manual = St.GetS("pos.mode") == "manual";
             St.Save();
             timer.Interval = Math.Max(250, St.GetI("ov.interval"));
             StatsNow.IntervalMs = timer.Interval;
@@ -403,6 +420,7 @@ namespace K2
                 catch { }
             }
             SyncEnabledCheck();
+            if (settingsForm != null && !settingsForm.IsDisposed) settingsForm.SyncFromApplied();
             UpdateVisible();
             Invalidate(true);
             RenderLayered(); // скругление/прозрачность применяются сразу, без перезапуска
@@ -524,6 +542,28 @@ namespace K2
             ToolStripMenuItem show = new ToolStripMenuItem(Loc.T("Show/hide overlay"));
             show.Click += delegate { hiddenByUser = !hiddenByUser; UpdateVisible(); };
             menu.Items.Add(show);
+
+            miEdit = new ToolStripMenuItem(Loc.T("Move / resize"));
+            miEdit.CheckOnClick = true;
+            miEdit.Checked = editMode;
+            miEdit.CheckedChanged += delegate
+            {
+                editMode = miEdit.Checked;
+                UpdateRegion();
+                if (!editMode)
+                {
+                    Cursor = Cursors.Default;
+                    SavePos();
+                    St.Save();
+                }
+                Invalidate();
+            };
+            menu.Items.Add(miEdit);
+
+            ToolStripMenuItem fit = new ToolStripMenuItem(Loc.T("Fit to content"));
+            fit.Click += delegate { FitToContent(); };
+            menu.Items.Add(fit);
+            menu.Items.Add(new ToolStripSeparator());
 
             miEnabled = new ToolStripMenuItem(Loc.T("Overlay enabled (master)"));
             miEnabled.CheckOnClick = true;
@@ -896,10 +936,27 @@ namespace K2
 
         void UpdateHeightAndRepaint()
         {
+            if (resizing) { Invalidate(); return; }
             OverlayDraw probe = new OverlayDraw(null, St, cur, StatsNow, S);
             float h = probe.DrawWithWidth(null, ClientSize.Width);
+            int minW = probe.MinWidth;
             probe.DisposeFonts();
+
+            bool widthChanged = false;
+            if (St.GetB("look.autoWidth") && minW > 0)
+            {
+                int pct = WidthPercent(minW);
+                if (pct != St.GetI("look.width"))
+                {
+                    St.Set("look.width", pct);
+                    ApplyWindowSize();
+                    widthChanged = true;
+                }
+            }
+
             int hi = (int)(h + PadBottom());
+            int manual = St.GetI("look.heightPx");
+            if (manual > 0) hi = Math.Max(hi, (int)Math.Round(manual * S));
             if (Math.Abs(hi - ClientSize.Height) > 1)
             {
                 ClientSize = new Size(ClientSize.Width, hi);
@@ -910,7 +967,36 @@ namespace K2
                 else
                     ClampToScreen();
             }
+            else if (widthChanged)
+            {
+                if (St.GetS("pos.mode") != "manual") ApplyPosition();
+                else ClampToScreen();
+            }
             Invalidate();
+        }
+
+        int WidthPercent(int px)
+        {
+            float scale = Math.Max(50, Math.Min(200, St.GetI("look.scale"))) / 100f;
+            float unit = OverlayDraw.BaseW * scale * S;
+            if (unit <= 0) return 100;
+            int pct = (int)Math.Ceiling(px / unit * 100.0);
+            return Math.Max(50, Math.Min(200, pct));
+        }
+
+        void FitToContent()
+        {
+            OverlayDraw probe = new OverlayDraw(null, St, cur, StatsNow, S);
+            probe.DrawWithWidth(null, ClientSize.Width);
+            int minW = probe.MinWidth;
+            probe.DisposeFonts();
+            if (minW > 0) St.Set("look.width", WidthPercent(minW));
+            St.Set("look.heightPx", 0);
+            St.Save();
+            ApplyWindowSize();
+            UpdateHeightAndRepaint();
+            RenderLayered();
+            if (settingsForm != null && !settingsForm.IsDisposed) settingsForm.SyncFromApplied();
         }
 
         float PadBottom() { return 10 * S * Math.Max(0.5f, St.GetI("look.scale") / 100f); }
@@ -983,6 +1069,8 @@ namespace K2
                         graphRectClient = od.LastGraphRect;
                         od.DisposeFonts();
 
+                        if (editMode) DrawEditFrame(g);
+
                         if (!cur.Ready)
                         {
                             using (Brush b = new SolidBrush(Color.FromArgb(200, 200, 200)))
@@ -1034,26 +1122,89 @@ namespace K2
             finally { rendering = false; }
         }
 
+        void DrawEditFrame(Graphics g)
+        {
+            Color c = Color.FromArgb(0, 191, 166);
+            using (Pen p = new Pen(Color.FromArgb(235, c), 2f))
+            {
+                p.DashStyle = DashStyle.Dash;
+                g.DrawRectangle(p, 1, 1, Width - 3, Height - 3);
+            }
+            int s = 6;
+            using (Brush b = new SolidBrush(Color.FromArgb(255, c)))
+            {
+                g.FillRectangle(b, 1, 1, s, s);
+                g.FillRectangle(b, Width - 1 - s, 1, s, s);
+                g.FillRectangle(b, 1, Height - 1 - s, s, s);
+                g.FillRectangle(b, Width - 1 - s, Height - 1 - s, s, s);
+                g.FillRectangle(b, Width / 2 - s / 2, 1, s, s);
+                g.FillRectangle(b, Width / 2 - s / 2, Height - 1 - s, s, s);
+                g.FillRectangle(b, 1, Height / 2 - s / 2, s, s);
+                g.FillRectangle(b, Width - 1 - s, Height / 2 - s / 2, s, s);
+            }
+        }
+
         // ---------- interaction ----------
         protected override void OnMouseDown(MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left)
             {
+                if (editMode)
+                {
+                    int edge = EdgeAt(e.Location);
+                    if (edge != 0 && edge != 3 && edge != 12)
+                    {
+                        StartResize(edge);
+                        base.OnMouseDown(e);
+                        return;
+                    }
+                    dragging = true;
+                    dragStart = e.Location;
+                    tip.SetToolTip(this, Loc.T("Drag to move. Click the graph for history. Right-click for menu"));
+                    base.OnMouseDown(e);
+                    return;
+                }
                 if (graphRectClient.Contains(new Point(e.X, e.Y)))
                 {
                     ToggleHistory();
                     base.OnMouseDown(e);
                     return;
                 }
-                dragging = true;
-                dragStart = e.Location;
-                tip.SetToolTip(this, Loc.T("Drag to move. Click the graph for history. Right-click for menu"));
             }
             base.OnMouseDown(e);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            if (resizing)
+            {
+                Point p = Cursor.Position;
+                int dx = p.X - resizeStartMouse.X;
+                int dy = p.Y - resizeStartMouse.Y;
+                Rectangle b = resizeStartBounds;
+                float sc = Math.Max(50, Math.Min(200, St.GetI("look.scale"))) / 100f;
+                int minW = (int)Math.Round(OverlayDraw.BaseW * 0.5f * sc * S);
+                int minH = (int)Math.Round(80 * S);
+                if ((resizeEdge & 1) != 0) { b.X += dx; b.Width -= dx; }
+                if ((resizeEdge & 2) != 0) b.Width += dx;
+                if ((resizeEdge & 4) != 0) { b.Y += dy; b.Height -= dy; }
+                if ((resizeEdge & 8) != 0) b.Height += dy;
+                if (b.Width < minW)
+                {
+                    if ((resizeEdge & 1) != 0) b.X = resizeStartBounds.Right - minW;
+                    b.Width = minW;
+                }
+                if (b.Height < minH)
+                {
+                    if ((resizeEdge & 4) != 0) b.Y = resizeStartBounds.Bottom - minH;
+                    b.Height = minH;
+                }
+                Bounds = b;
+                RenderLayered();
+                base.OnMouseMove(e);
+                return;
+            }
+            if (editMode && !dragging) Cursor = CursorForEdge(EdgeAt(e.Location));
             if (dragging && e.Button == MouseButtons.Left)
                 Location = new Point(Left + e.X - dragStart.X, Top + e.Y - dragStart.Y);
             base.OnMouseMove(e);
@@ -1061,28 +1212,97 @@ namespace K2
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            if (resizing)
+            {
+                FinishResize();
+                base.OnMouseUp(e);
+                return;
+            }
             if (dragging)
             {
                 dragging = false;
                 St.Set("pos.mode", "manual");
+                RememberMonitor();
                 SavePos();
-                if (St.GetB("pos.pin")) PinCurrentMonitor();
                 St.Save(); // ручной режим и координаты должны пережить перезапуск
                 RenderLayered();
+                if (settingsForm != null && !settingsForm.IsDisposed) settingsForm.SyncFromApplied();
             }
             base.OnMouseUp(e);
         }
 
-        void PinCurrentMonitor()
+        int EdgeAt(Point p)
+        {
+            int m = 6;
+            bool l = p.X <= m;
+            bool r = p.X >= Width - m;
+            bool t = p.Y <= m;
+            bool b = p.Y >= Height - m;
+            return (l ? 1 : 0) | (r ? 2 : 0) | (t ? 4 : 0) | (b ? 8 : 0);
+        }
+
+        Cursor CursorForEdge(int e)
+        {
+            bool l = (e & 1) != 0, r = (e & 2) != 0;
+            bool t = (e & 4) != 0, b = (e & 8) != 0;
+            if ((l && t) || (r && b)) return Cursors.SizeNWSE;
+            if ((r && t) || (l && b)) return Cursors.SizeNESW;
+            if (l || r) return Cursors.SizeWE;
+            if (t || b) return Cursors.SizeNS;
+            return Cursors.SizeAll;
+        }
+
+        void StartResize(int edge)
+        {
+            resizing = true;
+            resizeEdge = edge;
+            resizeStartBounds = Bounds;
+            resizeStartMouse = Cursor.Position;
+            if (St.GetB("look.autoWidth")) St.Set("look.autoWidth", false);
+            Capture = true;
+            Cursor = CursorForEdge(edge);
+        }
+
+        void FinishResize()
+        {
+            if (!resizing) return;
+            resizing = false;
+            Capture = false;
+            St.Set("look.width", WidthPercent(Width));
+            if ((resizeEdge & 12) != 0)
+                St.Set("look.heightPx", Math.Max(0, (int)Math.Round(Height / S)));
+            St.Set("pos.mode", "manual");
+            RememberMonitor();
+            SavePos();
+            St.Save();
+            ApplyWindowSize();
+            UpdateHeightAndRepaint();
+            RenderLayered();
+            if (settingsForm != null && !settingsForm.IsDisposed) settingsForm.SyncFromApplied();
+        }
+
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            if (!Capture && resizing) FinishResize();
+            base.OnMouseCaptureChanged(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            if (editMode && !dragging && !resizing) Cursor = Cursors.Default;
+            base.OnMouseLeave(e);
+        }
+
+        bool RememberMonitor()
         {
             Screen[] all = Screen.AllScreens;
             for (int i = 0; i < all.Length; i++)
                 if (all[i].Bounds.Contains(new Point(Left + Width / 2, Top + Math.Min(Height / 2, 50))))
                 {
                     St.Set("pos.monitor", i);
-                    St.Save();
-                    break;
+                    return true;
                 }
+            return false;
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)
@@ -1124,7 +1344,8 @@ namespace K2
         void UpdateRegion()
         {
             if (!IsHandleCreated) return;
-            using (GraphicsPath p = RoundPath(new Rectangle(0, 0, Width, Height), St.GetI("look.radius") * S))
+            int rad = editMode ? 0 : (int)Math.Round(St.GetI("look.radius") * S);
+            using (GraphicsPath p = RoundPath(new Rectangle(0, 0, Width, Height), rad))
                 Region = new Region(p);
         }
 

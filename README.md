@@ -23,10 +23,14 @@ fully configurable.
 - Session statistics (min/max), history window (click the core graph)
 - Settings window: block order, units, size, scale, opacity, corner radius,
   fonts, global hotkeys, "game only" mode
-- Overlay color scheme: panel background, headers, labels, values, separators,
-  accents, load/temperature zones and the frame-time graph; each overlay block
-  (FPS, GPU, CPU, RAM, Statistics) can set its own header/label/value colors.
-  A **Defaults** button restores the current look (overlay only)
+- Tray **Move / resize** mode: drag to move, drag edges/corners to resize; the
+  overlay is fixed outside this mode. **Fit to content** and auto width shrink
+  it to the visible blocks
+- Overlay color scheme: panel background (with a transparency slider), headers,
+  labels, values, separators, accents, load/temperature zones and the
+  frame-time graph; each overlay block (FPS, GPU, CPU, RAM, Statistics) can set
+  its own header/label/value colors. A **Defaults** button restores the current
+  look (overlay only)
 - Safe limits for every setting: broken/hand-edited INI values are clamped
   instead of crashing the overlay
 - Single-instance protection (a second launch does not duplicate the overlay)
@@ -89,6 +93,22 @@ Alt+F7 compact mode, Alt+F11 pause/resume measuring.
   `tools/PresentMon-2.4.1-x64.exe` is missing, run `resolve.ps1`.
 
 ## Changelog
+
+### 1.5.0
+
+- Added a tray **Move / resize** mode with a visible frame: drag inside to move,
+  drag edges or corners to resize. Outside this mode the overlay cannot be
+  moved or resized.
+- Added **Fit to content** and an **Auto width** option: the overlay width can
+  follow the visible blocks instead of staying unnecessarily wide.
+- Manual height is remembered after resizing; **Fit to content** restores
+  automatic height.
+- Fixed the overlay jumping back to the top-right corner of the primary monitor
+  after a setting change when it had been moved or resized manually. Manual
+  position and the current monitor are preserved.
+- The Colors section now includes a **Background transparency** slider. At
+  100% the panel is fully transparent (only the text remains), so the panel
+  color is invisible; lower the value to see it.
 
 ### 1.4.0
 

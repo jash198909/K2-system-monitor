@@ -142,6 +142,7 @@ namespace K2
             { "Statistics block", "Блок «Статистика»" },
             { "Use zone colors", "Использовать цвета зон" },
             { "Zone colors apply to load and temperature. Turn them off in the GPU or CPU block to use the block value color for every reading.", "Цвета зон применяются к загрузке и температуре. Отключите их в блоке видеокарты или процессора, чтобы все показатели блока окрашивались в цвет значений." },
+            { "At 100% the panel background is fully transparent; lower the value to see the selected color.", "При 100% фон панели полностью прозрачен; уменьшите значение, чтобы увидеть выбранный цвет." },
             { "Accents", "Акценты" },
             { "Load and temperature zones", "Зоны загрузки и температуры" },
             { "Graphs", "Графики" },
@@ -296,6 +297,10 @@ namespace K2
 
             // ---------- трей и сообщения ----------
             { "Show/hide overlay", "Показать/скрыть оверлей" },
+            { "Move / resize", "Переместить / изменить размер" },
+            { "Fit to content", "Подогнать под содержимое" },
+            { "Auto width (fit to content)", "Авто-ширина (по содержимому)" },
+            { "When enabled, the overlay width follows the visible blocks. Turn it off to set the width manually. The tray menu also has \"Move / resize\" and \"Fit to content\".", "Когда включено, ширина оверлея подстраивается под видимые блоки. Отключите, чтобы задавать ширину вручную. В меню трея также есть «Переместить / изменить размер» и «Подогнать под содержимое»." },
             { "Overlay enabled (master)", "Оверлей включён (мастер)" },
             { "Settings…", "Настройки…" },
             { "Always on top", "Поверх окон" },

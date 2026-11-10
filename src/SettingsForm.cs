@@ -125,6 +125,15 @@ namespace K2
         public void SyncFromApplied()
         {
             draft.Set("ov.interval", owner.St.GetS("ov.interval"));
+            draft.Set("look.width", owner.St.GetS("look.width"));
+            draft.Set("look.heightPx", owner.St.GetS("look.heightPx"));
+            draft.Set("look.autoWidth", owner.St.GetS("look.autoWidth"));
+            draft.Set("pos.mode", owner.St.GetS("pos.mode"));
+            draft.Set("pos.monitor", owner.St.GetS("pos.monitor"));
+            draft.Set("pos.corner", owner.St.GetS("pos.corner"));
+            draft.Set("pos.offX", owner.St.GetS("pos.offX"));
+            draft.Set("pos.offY", owner.St.GetS("pos.offY"));
+            draft.Set("pos.pin", owner.St.GetS("pos.pin"));
             Invalidate();
         }
 
@@ -205,9 +214,11 @@ namespace K2
                 case "look":
                     SEC("Shape and size");
                     CB("Overlay mode", "look.mode", "Floating,Pinned to position", new string[] { "float", "pin" });
-                    SL("Overlay width", "look.width", 60, 200);
+                    SL("Overlay width", "look.width", 50, 200);
                     SL("Window scale", "look.scale", 60, 200);
                     SL("Row height (\"Row\")", "look.rowH", 16, 40);
+                    T("Auto width (fit to content)", "look.autoWidth");
+                    INFO("When enabled, the overlay width follows the visible blocks. Turn it off to set the width manually. The tray menu also has \"Move / resize\" and \"Fit to content\".");
                     SEC("Overlay background");
                     SL("Background transparency", "look.opacity", 0, 100);
                     SL("Corner radius", "look.radius", 0, 30);
@@ -241,6 +252,8 @@ namespace K2
 
                     SEC("Overlay background");
                     COLOR("Panel background", "color.panel", cPanel);
+                    SL("Background transparency", "look.opacity", 0, 100);
+                    INFO("At 100% the panel background is fully transparent; lower the value to see the selected color.");
                     SEC("Base text");
                     COLOR("Header text", "color.header", cHeader);
                     COLOR("Labels", "color.label", cLabel);

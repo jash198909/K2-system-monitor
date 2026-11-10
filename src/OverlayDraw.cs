@@ -28,6 +28,11 @@ namespace K2
         // цвета текущего блока (переопределяются в «Настройках цвета»)
         Color curHeader, curLabel, curValue, curBig;
 
+        // измерение минимальной ширины по содержимому (g == null)
+        public int MinWidth;
+        Bitmap measureBmp;
+        Graphics measureG;
+
         Graphics g;               // null = только измерение
         Settings st;
         Snapshot s;
@@ -46,6 +51,11 @@ namespace K2
             this.g = g; this.st = st; this.s = s; this.stats = stats;
             this.S = dpiScale > 0 ? dpiScale : 1f;
             curHeader = HeaderC; curLabel = LabelC; curValue = ValueC; curBig = OrangeAccent();
+            if (g == null)
+            {
+                measureBmp = new Bitmap(1, 1);
+                measureG = Graphics.FromImage(measureBmp);
+            }
             this.US = Math.Max(50, Math.Min(200, st.GetI("look.scale"))) / 100f;
             int fontPct = Math.Max(50, Math.Min(200, st.GetI("look.fontSize")));
             float fs = S * US * fontPct / 100f;
@@ -73,6 +83,20 @@ namespace K2
         public void DisposeFonts()
         {
             fH.Dispose(); fL.Dispose(); fV.Dispose(); fC.Dispose(); fM.Dispose(); fBig.Dispose();
+            if (measureG != null) { measureG.Dispose(); measureG = null; }
+            if (measureBmp != null) { measureBmp.Dispose(); measureBmp = null; }
+        }
+
+        float TW(string text, Font f)
+        {
+            if (measureG == null || text == null) return 0;
+            return measureG.MeasureString(text, f).Width;
+        }
+
+        void Need(float w)
+        {
+            int v = (int)Math.Ceiling(w);
+            if (v > MinWidth) MinWidth = v;
         }
 
         public const float BaseW = 420f;
@@ -99,6 +123,13 @@ namespace K2
             y = Pad();
             float x = Pad();
             float cw = Math.Max(1f, w - 2 * x);
+
+            Need(160 * S);
+            if (measureG != null)
+            {
+                float mw = TW("K2", fM) + TW("00:00:00", fC) + Pad() * 2 + 30 * S;
+                Need(mw);
+            }
 
             // Шапка: K2 слева, время справа — отдельная строка, не пересекается с блоками.
             float lineH = Math.Max(fM.Height, fC.Height);
@@ -323,6 +354,8 @@ namespace K2
         bool DrawFtg(float x, float cw)
         {
             if (!st.GetB("ft.show")) return false;
+            if (measureG != null) Need(220 * S);
+            if (measureG != null) Need(TW("00.0" + Loc.T(" ms"), fC) + Pad() * 2);
             float h = Math.Max(40, Math.Min(160, st.GetI("ft.height"))) * S * US;
             if (g != null)
             {
@@ -391,7 +424,14 @@ namespace K2
         {
             int h = (int)HdrH();
             text = Loc.T(text);
-            Draw(g2 => GText(g2, text, fH, new Rectangle((int)x, (int)y, (int)(cw * 0.62f), h), curHeader, false));
+            float hw = bigValue != null ? cw * 0.62f : cw;
+            if (measureG != null)
+            {
+                float mw = TW(text, fH) + Pad() * 2 + 8 * S;
+                if (bigValue != null) mw += TW(bigValue, fBig) + 16 * S;
+                Need(mw);
+            }
+            Draw(g2 => GText(g2, text, fH, new Rectangle((int)x, (int)y, (int)hw, h), curHeader, false));
             if (bigValue != null)
                 Draw(g2 => GText(g2, bigValue, fBig, new Rectangle((int)x, (int)y, (int)cw, h), curBig, true));
             y += HdrH();
@@ -402,6 +442,7 @@ namespace K2
             int h = (int)RowH();
             float x = Pad();
             float cw = CurrentW;
+            if (measureG != null) Need(TW(Loc.T(label), fL) + TW(value, fV) + Pad() * 2 + 16 * S);
             Draw(g2 => GText(g2, Loc.T(label), fL, new Rectangle((int)x, (int)y, (int)(cw * 0.7f), h), curLabel, false));
             Draw(g2 => GText(g2, value, fV, new Rectangle((int)x, (int)y, (int)cw, h), vc, true));
             y += RowH();
@@ -411,6 +452,7 @@ namespace K2
         {
             int h = (int)RowH();
             float x = Pad();
+            if (measureG != null) Need(TW(text, fL) + Pad() * 2 + 8 * S);
             Draw(g2 => GText(g2, text, fL, new Rectangle((int)x, (int)y, (int)CurrentW, h), curLabel, false));
             y += h;
         }
@@ -421,6 +463,11 @@ namespace K2
             string label = Loc.T("Core ") + (idx + 1).ToString("00", Cul) + ":";
             int hh = (int)CoreH();
             float cx = Pad();
+            if (measureG != null)
+            {
+                float cell = TW(label, fC) + TW(Freq(s.CoreFreqs[idx]), fC) + 12 * S;
+                Need(cell * 2 + Pad() * 2);
+            }
             Draw(g2 => GText(g2, label, fC, new Rectangle((int)x, (int)y, (int)(w * 0.55f), hh), curLabel, false));
             Draw(g2 => GText(g2, Freq(s.CoreFreqs[idx]), fC, new Rectangle((int)x, (int)y, (int)w, hh), curValue, true));
         }
@@ -428,6 +475,7 @@ namespace K2
         void DrawCoreGraph(float x, float w, float h)
         {
             LastGraphRect = new RectangleF(x, y, w, h);
+            if (measureG != null) Need(220 * S);
             float baseline = y + h * 0.8f;
             Draw(g2 =>
             {

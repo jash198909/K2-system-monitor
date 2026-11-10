@@ -107,12 +107,14 @@ namespace K2
                 case "look.width": return "100";
                 case "look.scale": return "100";
                 case "look.rowH": return "20";
-                case "look.opacity": return "100";
+                case "look.opacity": return "20";
                 case "look.radius": return "16";
                 case "look.font": return "Segoe UI";
                 case "look.fontSize": return "100";
                 case "look.showTime": return "0";
                 case "look.mode": return "float";
+                case "look.autoWidth": return "0";
+                case "look.heightPx": return "0";
                 // цвета оверлея (R,G,B)
                 case "color.panel": return "20,22,26";
                 case "color.header": return "240,240,240";
@@ -215,6 +217,7 @@ namespace K2
             ClampInt("look.opacity", 0, 100);
             ClampInt("look.radius", 0, 30);
             ClampInt("look.fontSize", 60, 150);
+            ClampInt("look.heightPx", 0, 4000);
             ClampInt("pos.offX", -100, 100);
             ClampInt("pos.offY", -100, 100);
             ClampInt("pos.monitor", -1, 15);
