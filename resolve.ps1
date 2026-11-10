@@ -37,7 +37,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 function CleanVersion([string]$v) {
     if ([string]::IsNullOrWhiteSpace($v)) { return '' }
-    # поддерживает 1.2.3, [1.2.3], [1.0.0, 2.0.0), (>= 1.0.0)
+    # supports 1.2.3, [1.2.3], [1.0.0, 2.0.0), (>= 1.0.0)
     $m = [regex]::Match($v, '\d+(\.\d+){0,3}(-[0-9A-Za-z\.\-]+)?')
     if ($m.Success) { return $m.Value }
     return ''

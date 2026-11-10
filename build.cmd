@@ -11,6 +11,6 @@ copy /y "%ROOT%\lib\*.dll" "%OUT%\" >nul
   /reference:"%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\netstandard.dll" ^
   /reference:"%ROOT%\lib\LibreHardwareMonitorLib.dll" ^
   /reference:"%ROOT%\lib\SharpDX.dll" /reference:"%ROOT%\lib\SharpDX.DXGI.dll" /reference:"%ROOT%\lib\SharpDX.Direct3D11.dll" ^
-  "%ROOT%\src\AssemblyInfo.cs" "%ROOT%\src\Program.cs" "%ROOT%\src\Monitor.cs" "%ROOT%\src\MainForm.cs" "%ROOT%\src\HistoryForm.cs" "%ROOT%\src\Settings.cs" "%ROOT%\src\Stats.cs" "%ROOT%\src\OverlayDraw.cs" "%ROOT%\src\SettingsForm.cs" "%ROOT%\src\PreviewControl.cs" "%ROOT%\src\MenuTheme.cs" "%ROOT%\src\FpsEngine.cs" "%ROOT%\src\PreviewDump.cs"
+  "%ROOT%\src\AssemblyInfo.cs" "%ROOT%\src\Program.cs" "%ROOT%\src\Monitor.cs" "%ROOT%\src\MainForm.cs" "%ROOT%\src\HistoryForm.cs" "%ROOT%\src\Settings.cs" "%ROOT%\src\Stats.cs" "%ROOT%\src\OverlayDraw.cs" "%ROOT%\src\SettingsForm.cs" "%ROOT%\src\PreviewControl.cs" "%ROOT%\src\MenuTheme.cs" "%ROOT%\src\FpsEngine.cs" "%ROOT%\src\PreviewDump.cs" "%ROOT%\src\Loc.cs" "%ROOT%\src\RestartPrompt.cs"
 if errorlevel 1 (echo BUILD FAILED & exit /b 1)
 echo BUILD OK: %OUT%\K2.exe

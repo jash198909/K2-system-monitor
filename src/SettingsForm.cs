@@ -70,7 +70,7 @@ namespace K2
         Rectangle rectCoffee;
         const string CoffeeUrl = "https://www.donationalerts.com/r/jash_k2";
         Font fTitle, fBread, fNav, fNavCat, fLabel, fValue, fSmall, fBig2, fClose;
-        static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
+        static CultureInfo Cul { get { return Loc.Culture; } }
 
         static readonly string[] SectionNames = new string[]
         {
@@ -78,15 +78,15 @@ namespace K2
         };
         static readonly string[] SectionTitles = new string[]
         {
-            "Общие", "Расположение", "Внешний вид", "Горячие клавиши",
-            "FPS", "Видеокарта", "Процессор", "ОЗУ", "Статистика", "График времени кадра"
+            "General", "Position", "Appearance", "Hotkeys",
+            "FPS", "GPU", "CPU", "RAM", "Statistics", "Frame time graph"
         };
 
         public SettingsForm(MainForm owner)
         {
             this.owner = owner;
             this.draft = owner.St.Clone();
-            Text = "K2 — настройки";
+            Text = Loc.T("K2 — Settings");
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = WBack;
@@ -129,7 +129,7 @@ namespace K2
         // ---------- структура разделов ----------
         SRow R(string kind, string label, string key)
         {
-            SRow r = new SRow(); r.Kind = kind; r.Label = label; r.Key = key;
+            SRow r = new SRow(); r.Kind = kind; r.Label = Loc.T(label); r.Key = key;
             rows.Add(r); return r;
         }
         SRow T(string label, string key) { return R("toggle", label, key); }
@@ -140,7 +140,10 @@ namespace K2
         SRow CB(string label, string key, string opts, string[] vals)
         {
             SRow r = R("combo", label, key);
-            r.Options = opts.Split(','); r.Tag = vals; return r;
+            string[] parts = opts.Split(',');
+            if (key != "ui.lang")
+                for (int i = 0; i < parts.Length; i++) parts[i] = Loc.T(parts[i].Trim());
+            r.Options = parts; r.Tag = vals; return r;
         }
         SRow INFO(string text) { return R("info", text, null); }
         SRow SEC(string text) { return R("section", text, null); }
@@ -152,155 +155,157 @@ namespace K2
             switch (section)
             {
                 case "general":
-                    SEC("Основные параметры");
-                    T("Включить оверлей", "ov.enabled");
-                    T("Запускать вместе с Windows", "ov.autostart");
-                    T("Проверка при запуске", "ov.checkStart");
-                    T("Режим «Только игра»", "ov.onlyGame");
-                    CB("Интервал обновления", "ov.interval", "250 мс,500 мс,1 с,2 с,5 с", new string[] { "250", "500", "1000", "2000", "5000" });
-                    SEC("Единицы измерения");
-                    CB("Температура", "ov.tempUnit", "°C (Цельсий),°F (Фаренгейт)", new string[] { "C", "F" });
-                    CB("Частота", "ov.freqUnit", "ГГц,МГц", new string[] { "GHz", "MHz" });
-                    CB("Единицы памяти", "ov.memUnit", "ГБ,МБ", new string[] { "GB", "MB" });
-                    INFO("Исключения режима «только игра» помечаются из меню значка в трее, пока оверлей активен.");
+                    SEC("Main settings");
+                    CB("Language", "ui.lang", "English,Русский", new string[] { "en", "ru" });
+                    INFO("Restart K2 to apply the language.");
+                    T("Enable overlay", "ov.enabled");
+                    T("Run at Windows startup", "ov.autostart");
+                    T("Check sensors at startup", "ov.checkStart");
+                    T("\"Game only\" mode", "ov.onlyGame");
+                    CB("Update interval", "ov.interval", "250 ms,500 ms,1 s,2 s,5 s", new string[] { "250", "500", "1000", "2000", "5000" });
+                    SEC("Units");
+                    CB("Temperature", "ov.tempUnit", "°C (Celsius),°F (Fahrenheit)", new string[] { "C", "F" });
+                    CB("Frequency", "ov.freqUnit", "GHz,MHz", new string[] { "GHz", "MHz" });
+                    CB("Memory units", "ov.memUnit", "GB,MB", new string[] { "GB", "MB" });
+                    INFO("Game only exceptions are marked from the tray icon menu while the overlay is active.");
                     break;
 
                 case "pos":
-                    SEC("Положение оверлея");
-                    R("buttons", "", "pos.movebtn").Buttons = new string[] { "Переместить оверлей", "Сбросить положение" };
-                    CB("Привязка оверлея", "pos.mode", "Основной монитор,Ручное положение", new string[] { "pin", "manual" });
-                    T("Зафиксировать оверлей на мониторе", "pos.pin");
+                    SEC("Overlay position");
+                    R("buttons", "", "pos.movebtn").Buttons = new string[] { "Move overlay", "Reset position" };
+                    CB("Overlay anchoring", "pos.mode", "Primary monitor,Manual position", new string[] { "pin", "manual" });
+                    T("Pin overlay to monitor", "pos.pin");
                     string[] monOpts = new string[Screen.AllScreens.Length];
                     string[] monVals = new string[Screen.AllScreens.Length];
-                    for (int i = 0; i < monOpts.Length; i++) { monOpts[i] = "Монитор " + (i + 1); monVals[i] = i.ToString(); }
-                    CB("Монитор", "pos.monitor", string.Join(",", monOpts), monVals);
-                    INFO("Зафиксированный оверлей стоит на выбранном мониторе. Перенести можно мышью — «Сбросить положение» снимает фиксацию.");
-                    CB("Позиция", "pos.corner", "Сверху справа,Сверху слева,Снизу справа,Снизу слева,По центру", new string[] { "TR", "TL", "BR", "BL", "C" });
-                    SL("Отступ X", "pos.offX", -100, 100);
-                    SL("Отступ Y", "pos.offY", -100, 100);
-                    SEC("Порядок блоков");
+                    for (int i = 0; i < monOpts.Length; i++) { monOpts[i] = Loc.T("Monitor ") + (i + 1); monVals[i] = i.ToString(); }
+                    CB("Monitor", "pos.monitor", string.Join(",", monOpts), monVals);
+                    INFO("A pinned overlay stays on the selected monitor. You can still drag it with the mouse — \"Reset position\" removes the pin.");
+                    CB("Screen corner", "pos.corner", "Top right,Top left,Bottom right,Bottom left,Center", new string[] { "TR", "TL", "BR", "BL", "C" });
+                    SL("Offset X", "pos.offX", -100, 100);
+                    SL("Offset Y", "pos.offY", -100, 100);
+                    SEC("Block order");
                     AddOrderRows();
                     break;
 
                 case "look":
-                    SEC("Форма и размер");
-                    CB("Режим оверлея", "look.mode", "Плавающий,Прижатый к позиции", new string[] { "float", "pin" });
-                    SL("Ширина оверлея", "look.width", 60, 200);
-                    SL("Масштаб окна", "look.scale", 60, 200);
-                    SL("Высота полосы («Строка»)", "look.rowH", 16, 40);
-                    SEC("Фон оверлея");
-                    SL("Прозрачность фона", "look.opacity", 0, 100);
-                    SL("Скругление", "look.radius", 0, 30);
-                    INFO("При 100% фон полностью исчезает — остаются только показатели и элементы оверлея. Скругление применяется сразу после «Применить».");
-                    SEC("Шрифты");
+                    SEC("Shape and size");
+                    CB("Overlay mode", "look.mode", "Floating,Pinned to position", new string[] { "float", "pin" });
+                    SL("Overlay width", "look.width", 60, 200);
+                    SL("Window scale", "look.scale", 60, 200);
+                    SL("Row height (\"Row\")", "look.rowH", 16, 40);
+                    SEC("Overlay background");
+                    SL("Background transparency", "look.opacity", 0, 100);
+                    SL("Corner radius", "look.radius", 0, 30);
+                    INFO("At 100% the background disappears completely — only the values and overlay elements remain. The corner radius is applied right after \"Apply\".");
+                    SEC("Fonts");
                     string[] fams = FontFamilies();
-                    CB("Шрифт", "look.font", JoinNoComma(fams), fams);
-                    T("Применять шрифт и к окнам программы", "look.fontAll");
-                    SL("Размер шрифта", "look.fontSize", 60, 150);
-                    SEC("Элементы оверлея");
-                    T("Показывать время", "look.showTime");
+                    CB("Font", "look.font", JoinNoComma(fams), fams);
+                    T("Apply font to program windows too", "look.fontAll");
+                    SL("Font size", "look.fontSize", 60, 150);
+                    SEC("Overlay elements");
+                    T("Show time", "look.showTime");
                     break;
 
                 case "keys":
-                    SEC("Глобальные горячие клавиши");
-                    HK("Показать / скрыть оверлей", "hk.show");
-                    HK("Сбросить статистику", "hk.reset");
-                    HK("Переключить режим оверлея", "hk.mode");
-                    HK("Открыть настройки", "hk.settings");
-                    HK("Начать / закончить замер", "hk.measure");
-                    INFO("Если сочетание занято другим приложением, после «Применить» оно просто не зарегистрируется.");
-                    INFO("Клик по полю клавиши — нажать новое сочетание, Esc — отменить ввод.");
+                    SEC("Global hotkeys");
+                    HK("Show / hide overlay", "hk.show");
+                    HK("Reset statistics", "hk.reset");
+                    HK("Toggle overlay mode", "hk.mode");
+                    HK("Open settings", "hk.settings");
+                    HK("Start / stop measurement", "hk.measure");
+                    INFO("If the shortcut is taken by another app, it simply won't register after \"Apply\".");
+                    INFO("Click the key field and press a new shortcut; Esc cancels input.");
                     break;
 
                 case "fps":
-                    SEC("Отображать показатели");
-                    T("Показывать FPS", "fps.show");
+                    SEC("Displayed metrics");
+                    T("Show FPS", "fps.show");
                     T("AVG", "fps.avg");
                     T("1% Low", "fps.low1");
                     T("0.1% Low", "fps.low01");
-                    T("Время кадра", "fps.lat");
-                    T("Процесс/окно", "fps.proc");
-                    T("API и разрешение", "fps.api");
-                    T("Скрывать показатели, если FPS = N/A", "fps.hideNa");
-                    INFO("FPS считается через Desktop Duplication — кадры, реально показываемые на мониторе активного окна. При VSync не превышает частоту обновления экрана. На статичном изображении счётчик молчит (нет новых кадров), блок при этом скрыт настройкой «Скрывать, если N/A». Предпросмотр всегда показывает демонстрационные значения FPS, чтобы было видно, как работают переключатели; реальный оверлей показывает FPS только тогда, когда он действительно считается (активна игра).");
+                    T("Frame time", "fps.lat");
+                    T("Process/window", "fps.proc");
+                    T("API and resolution", "fps.api");
+                    T("Hide metrics when FPS = N/A", "fps.hideNa");
+                    INFO("FPS is measured via Desktop Duplication — the frames actually shown on the active window's monitor. With VSync it does not exceed the display refresh rate. A static image produces no new frames, so the counter stays silent and the block is hidden by \"Hide if N/A\". The preview always shows demo FPS values so you can see how the toggles work; the real overlay shows FPS only while it is actually being measured (a game is active).");
                     break;
 
                 case "gpu":
-                    SEC("Показатели");
-                    T("Показывать блок «Видеокарта»", "gpu.show");
-                    T("Загрузка", "gpu.load");
-                    T("Температура", "gpu.temp");
-                    T("Температура Hotspot", "gpu.hotspot");
-                    T("Температура памяти", "gpu.memtemp");
-                    T("Частота", "gpu.clock");
-                    T("Память GPU", "gpu.memclock");
-                    T("Напряжение", "gpu.volt");
-                    T("Потребление", "gpu.power");
-                    T("Обороты вент.", "gpu.fanrpm");
-                    T("Обороты вент. в %", "gpu.fanpct");
-                    T("Видеопамять", "gpu.vram");
-                    SEC("Пороги предупреждений");
-                    T("Цветовая индикация загрузки GPU", "gpu.loadcolor");
-                    SL("Температура предупреждения", "gpu.warn", 50, 95);
-                    SL("Температура критическая", "gpu.crit", 60, 110);
+                    SEC("Metrics");
+                    T("Show \"GPU\" block", "gpu.show");
+                    T("Load", "gpu.load");
+                    T("Temperature", "gpu.temp");
+                    T("Hotspot temperature", "gpu.hotspot");
+                    T("Memory temperature", "gpu.memtemp");
+                    T("Clock", "gpu.clock");
+                    T("Memory clock", "gpu.memclock");
+                    T("Voltage", "gpu.volt");
+                    T("Power", "gpu.power");
+                    T("Fan speed", "gpu.fanrpm");
+                    T("Fan speed, %", "gpu.fanpct");
+                    T("VRAM", "gpu.vram");
+                    SEC("Warning thresholds");
+                    T("Color-code GPU load", "gpu.loadcolor");
+                    SL("Warning temperature", "gpu.warn", 50, 95);
+                    SL("Critical temperature", "gpu.crit", 60, 110);
                     break;
 
                 case "cpu":
-                    SEC("Показатели");
-                    T("Показывать блок «Процессор»", "cpu.show");
-                    T("Загрузка", "cpu.load");
-                    T("Температура", "cpu.temp");
-                    T("Температуры ядер", "cpu.ccd");
-                    T("Частота (макс.)", "cpu.clock");
-                    T("Эффективная частота", "cpu.eff");
-                    T("Потребление", "cpu.power");
-                    T("Обороты вент.", "cpu.fanrpm");
-                    T("Обороты вент. в %", "cpu.fanpct");
-                    SEC("Ядра");
-                    T("Частоты по ядрам", "cpu.corefreqs");
-                    T("График загрузки по ядрам", "cpu.coregraph");
-                    T("Подписи под графиком", "cpu.corelabels");
-                    SEC("Пороги предупреждений");
-                    T("Цветовая индикация загрузки CPU", "cpu.loadcolor");
-                    SL("Температура предупреждения", "cpu.warn", 50, 95);
-                    SL("Температура критическая", "cpu.crit", 60, 110);
+                    SEC("Metrics");
+                    T("Show \"CPU\" block", "cpu.show");
+                    T("Load", "cpu.load");
+                    T("Temperature", "cpu.temp");
+                    T("Core temperatures", "cpu.ccd");
+                    T("Clock (max.)", "cpu.clock");
+                    T("Effective clock", "cpu.eff");
+                    T("Power", "cpu.power");
+                    T("Fan speed", "cpu.fanrpm");
+                    T("Fan speed, %", "cpu.fanpct");
+                    SEC("Cores");
+                    T("Per-core clocks", "cpu.corefreqs");
+                    T("Per-core load graph", "cpu.coregraph");
+                    T("Labels under graph", "cpu.corelabels");
+                    SEC("Warning thresholds");
+                    T("Color-code CPU load", "cpu.loadcolor");
+                    SL("Warning temperature", "cpu.warn", 50, 95);
+                    SL("Critical temperature", "cpu.crit", 60, 110);
                     break;
 
                 case "ram":
-                    SEC("Основные параметры");
-                    T("Показывать блок ОЗУ", "ram.show");
-                    T("Использовано", "ram.used");
-                    T("Загрузка", "ram.load");
-                    T("Показывать скорость в мегагерцах", "ram.speed");
-                    CB("Источник частоты памяти", "ram.speedMode", "Авто (по данным системы),Авто+ (лимит контроллера CPU),Вручную", new string[] { "auto", "hw", "manual" });
-                    SL("Частота вручную, МГц", "ram.speedManual", 800, 8000);
-                    INFO("«Авто+» снижает SPD-номинал до лимита контроллера памяти процессора (по спецификации Intel) — на Xeon v4 с плашками 3200 покажет фактические 2400. «Вручную» — если хочешь задать число самому.");
-                    T("Температуры плашек ОЗУ", "ram.dimmt");
-                    CB("Формат памяти", "ram.format", "Использовано / всего,Только использовано,Проценты", new string[] { "usedtotal", "used", "pct" });
+                    SEC("Main settings");
+                    T("Show \"RAM\" block", "ram.show");
+                    T("Used", "ram.used");
+                    T("Load", "ram.load");
+                    T("Show memory speed in MHz", "ram.speed");
+                    CB("Memory speed source", "ram.speedMode", "Auto (system data),Auto+ (CPU memory controller limit),Manual", new string[] { "auto", "hw", "manual" });
+                    SL("Manual speed, MHz", "ram.speedManual", 800, 8000);
+                    INFO("\"Auto+\" caps the SPD rating at the CPU memory controller limit (per Intel spec) — a Xeon v4 with 3200 modules will show the actual 2400. \"Manual\" lets you set the number yourself.");
+                    T("RAM DIMM temperatures", "ram.dimmt");
+                    CB("Memory format", "ram.format", "Used / total,Used only,Percent", new string[] { "usedtotal", "used", "pct" });
                     break;
 
                 case "stat":
-                    SEC("Состав блока");
-                    T("Показывать блок статистики", "stat.show");
-                    T("Температура GPU", "stat.gput");
-                    T("Температура CPU", "stat.cput");
-                    T("Температура VRAM", "stat.vramt");
+                    SEC("Block contents");
+                    T("Show statistics block", "stat.show");
+                    T("GPU temperature", "stat.gput");
+                    T("CPU temperature", "stat.cput");
+                    T("VRAM temperature", "stat.vramt");
                     T("Hotspot", "stat.hotspot");
-                    T("Напряжение GPU", "stat.gpuv");
-                    T("Потребление GPU", "stat.gpup");
-                    T("Потребление CPU", "stat.cpup");
-                    T("Автосброс при смене игры", "stat.autoreset");
-                    SEC("Текущая сессия");
-                    R("buttons", "", "stat.resetbtn").Buttons = new string[] { "Сбросить статистику" };
+                    T("GPU voltage", "stat.gpuv");
+                    T("GPU power", "stat.gpup");
+                    T("CPU power", "stat.cpup");
+                    T("Auto-reset on game change", "stat.autoreset");
+                    SEC("Current session");
+                    R("buttons", "", "stat.resetbtn").Buttons = new string[] { "Reset statistics" };
                     break;
 
                 case "ftg":
-                    SEC("Основные параметры");
-                    T("Показывать график", "ft.show");
-                    SL("Высота", "ft.height", 40, 160);
-                    SL("Прозрачность заливки", "ft.fill", 0, 100);
-                    T("Показывать время кадра", "ft.showtime");
-                    INFO("График времени кадра появится, когда накопится достаточно замеров.");
+                    SEC("Main settings");
+                    T("Show graph", "ft.show");
+                    SL("Height", "ft.height", 40, 160);
+                    SL("Fill opacity", "ft.fill", 0, 100);
+                    T("Show frame time", "ft.showtime");
+                    INFO("The frame time graph will appear once enough samples have been collected.");
                     break;
             }
         }
@@ -327,11 +332,11 @@ namespace K2
             switch (b.Trim())
             {
                 case "fps": return "FPS";
-                case "gpu": return "Видеокарта";
-                case "cpu": return "Процессор";
-                case "ram": return "ОЗУ";
-                case "stat": return "Статистика";
-                case "ftg": return "График времени кадра";
+                case "gpu": return "GPU";
+                case "cpu": return "CPU";
+                case "ram": return "RAM";
+                case "stat": return "Statistics";
+                case "ftg": return "Frame time graph";
             }
             return b;
         }
@@ -623,7 +628,7 @@ namespace K2
             using (Pen p = new Pen(CtlBorder)) g.DrawRectangle(p, chip);
             using (Brush b = new SolidBrush(NavDim)) g.DrawString(VersionLabel(), fSmall, b, chip.Left + 7, chip.Top + 4);
             using (Brush b = new SolidBrush(NavDim))
-                g.DrawString(" / Настройки / " + SectionTitle(section), fBread, b, chip.Right + 10, 16);
+                g.DrawString(Loc.T(" / Settings / ") + SectionTitle(section), fBread, b, chip.Right + 10, 16);
             RectangleF mrect = maxed ? new RectangleF(Width - 78, 12, 28, 24) : new RectangleF(Width - 78, 12, 28, 24);
             maxRect = mrect;
             using (Brush b = new SolidBrush(NavDim))
@@ -634,7 +639,7 @@ namespace K2
 
         string SectionTitle(string sec)
         {
-            for (int i = 0; i < SectionNames.Length; i++) if (SectionNames[i] == sec) return SectionTitles[i];
+            for (int i = 0; i < SectionNames.Length; i++) if (SectionNames[i] == sec) return Loc.T(SectionTitles[i]);
             return sec;
         }
 
@@ -642,14 +647,15 @@ namespace K2
         {
             using (Brush b = new SolidBrush(NavBack)) g.FillRectangle(b, 0, TopH(), NavW(), Height - TopH());
             int y = TopH() + 16;
-            y = NavGroup(g, y, "ОВЕРЛЕЙ", new string[] { "general", "pos", "look", "keys" });
-            y = NavGroup(g, y, "ПОКАЗАТЕЛИ", new string[] { "fps", "gpu", "cpu", "ram", "stat", "ftg" });
+            y = NavGroup(g, y, "OVERLAY", new string[] { "general", "pos", "look", "keys" });
+            y = NavGroup(g, y, "METRICS", new string[] { "fps", "gpu", "cpu", "ram", "stat", "ftg" });
 
             // Ссылка «Автору на кофе» — сразу под пунктом «График времени кадра».
             rectCoffee = new Rectangle(6, y + 4, NavW() - 12, 26);
+            string coffee = Loc.T("☕ Support the author");
             using (Brush b = new SolidBrush(Acc))
-                g.DrawString("☕ Автору на кофе", fNav, b, rectCoffee.X + 12, rectCoffee.Y + 5);
-            SizeF cs = g.MeasureString("☕ Автору на кофе", fNav);
+                g.DrawString(coffee, fNav, b, rectCoffee.X + 12, rectCoffee.Y + 5);
+            SizeF cs = g.MeasureString(coffee, fNav);
             using (Pen p = new Pen(Color.FromArgb(150, Acc)))
                 g.DrawLine(p, rectCoffee.X + 12, rectCoffee.Y + 7 + cs.Height,
                     rectCoffee.X + 12 + cs.Width, rectCoffee.Y + 7 + cs.Height);
@@ -657,12 +663,12 @@ namespace K2
             using (Brush b = new SolidBrush(Acc))
                 g.DrawString("by Jash/K2", fSmall, b, 16, Height - 106);
 
-            rectExport = new Rectangle(10, Height - 88, 54, 30);
-            rectImport = new Rectangle(68, Height - 88, 54, 30);
-            rectReset = new Rectangle(126, Height - 88, 54, 30);
-            FooterBtn(g, rectExport, "Экспорт");
-            FooterBtn(g, rectImport, "Импорт");
-            FooterBtn(g, rectReset, "Сброс");
+            rectExport = new Rectangle(4, Height - 88, 60, 30);
+            rectImport = new Rectangle(66, Height - 88, 60, 30);
+            rectReset = new Rectangle(128, Height - 88, 60, 30);
+            FooterBtn(g, rectExport, "Export");
+            FooterBtn(g, rectImport, "Import");
+            FooterBtn(g, rectReset, "Reset");
         }
 
         int NavGroup(Graphics g, int y, string cat, string[] items)
@@ -670,7 +676,7 @@ namespace K2
             bool compact = Height < 700;
             int step = compact ? 30 : 38;
             int itemH = compact ? 26 : 34;
-            using (Brush b = new SolidBrush(NavDim)) g.DrawString(cat, fNavCat, b, 16, y);
+            using (Brush b = new SolidBrush(NavDim)) g.DrawString(Loc.T(cat), fNavCat, b, 16, y);
             y += compact ? 18 : 22;
             for (int i = 0; i < items.Length; i++)
             {
@@ -689,7 +695,7 @@ namespace K2
         {
             using (Brush b = new SolidBrush(CtlBack)) FillRound(g, r, 6, b);
             using (Pen p = new Pen(CtlBorder)) DrawRound(g, p, r, 6);
-            TextRenderer.DrawText(g, text, fValue, r, NavText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(g, Loc.T(text), fValue, r, NavText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
 
         void DrawRows(Graphics g)
@@ -705,7 +711,7 @@ namespace K2
                     r.Rect = new Rectangle(cr.X, y, cr.Width, 24);
                     if (y + 24 > cr.Top && y < cr.Bottom)
                         using (Brush b = new SolidBrush(NavDim))
-                            g.DrawString(r.Label.ToUpper(Ru), fNavCat, b, cr.X + 4, y);
+                            g.DrawString(r.Label.ToUpper(Cul), fNavCat, b, cr.X + 4, y);
                     y += 28;
                     continue;
                 }
@@ -734,8 +740,8 @@ namespace K2
                         List<Rectangle> bs = new List<Rectangle>();
                         foreach (string bt in r.Buttons)
                         {
-                            SizeF s2 = g.MeasureString(bt, fValue);
-                            Rectangle b2 = new Rectangle(bx, y + 8, (int)s2.Width + 28, 32);
+                            Size s2 = TextRenderer.MeasureText(Loc.T(bt), fValue);
+                            Rectangle b2 = new Rectangle(bx, y + 8, s2.Width + 28, 32);
                             bs.Add(b2);
                             FooterBtn(g, b2, bt);
                             bx += b2.Width + 12;
@@ -768,7 +774,7 @@ namespace K2
             using (Brush b = new SolidBrush(NavDim))
                 g.DrawString((r.OrderIndex + 1).ToString("00"), fValue, b, cr.X + 10, y + 12);
             using (Brush b = new SolidBrush(tc))
-                g.DrawString(OrderName(r.Key), fLabel, b, cr.X + 44, y + 12);
+                g.DrawString(Loc.T(OrderName(r.Key)), fLabel, b, cr.X + 44, y + 12);
             Rectangle up = new Rectangle(cr.Right - 88, y + 6, 36, 36);
             Rectangle dn = new Rectangle(cr.Right - 46, y + 6, 36, 36);
             r.Ctl = up;
@@ -836,7 +842,7 @@ namespace K2
                     bool en = spec.Length > 0 && !spec.StartsWith("-");
                     Rectangle tog = new Rectangle(area.X, area.Y + 4, 44, 24);
                     DrawToggleSmall(g, tog, en);
-                    string txt = captureRow == r ? "нажмите клавиши…" : HotkeyDisplay(spec);
+                    string txt = captureRow == r ? Loc.T("press keys…") : HotkeyDisplay(spec);
                     Rectangle kb = new Rectangle(area.X + 54, area.Y, area.Width - 54, 32);
                     using (Brush b = new SolidBrush(captureRow == r ? AccDim : CtlBack)) FillRound(g, kb, 6, b);
                     using (Pen p = new Pen(captureRow == r ? Acc : CtlBorder)) DrawRound(g, p, kb, 6);
@@ -857,7 +863,7 @@ namespace K2
                 case "look.opacity":
                 case "look.fontSize":
                 case "ft.fill": return v + "%";
-                default: return v.ToString(Ru);
+                default: return v.ToString(Cul);
             }
         }
 
@@ -900,7 +906,7 @@ namespace K2
             if (!PreviewOn()) return;
             int px = Width - PreviewPanelW() + 10;
             using (Brush b = new SolidBrush(NavDim))
-                g.DrawString(owner.FpsLive ? "ПРЕДПРОСМОТР" : "ПРЕДПРОСМОТР · ДЕМО", fNavCat, b, px, TopH() + 16);
+                g.DrawString(Loc.T(owner.FpsLive ? "PREVIEW" : "PREVIEW · DEMO"), fNavCat, b, px, TopH() + 16);
             Rectangle box = new Rectangle(px, TopH() + 44, PreviewW, Height - TopH() - BottomH() - 64);
             using (Pen p = new Pen(LineC)) DrawRound(g, p, box, 10);
         }
@@ -911,26 +917,26 @@ namespace K2
             using (Brush b = new SolidBrush(NavBack)) g.FillRectangle(b, bar);
             int diff = owner.St.DiffCount(draft);
             using (Brush br = new SolidBrush(diff > 0 ? WarnText : NavDim))
-                g.DrawString("Изменено " + diff, fValue, br, 16, bar.Y + 13);
+                g.DrawString(Loc.T("Changed ") + diff, fValue, br, 16, bar.Y + 13);
             using (Brush br = new SolidBrush(NavDim))
             {
-                g.DrawString("Esc — отмена    Ctrl+S — применить", fSmall, br, 160, bar.Y + 15);
+                g.DrawString(Loc.T("Esc — cancel    Ctrl+S — apply"), fSmall, br, 160, bar.Y + 15);
                 // при узком окне правая подпись наезжает на кнопки — не рисуем её
-                if (Width >= 1180) g.DrawString("K2 — настройки оверлея", fSmall, br, 440, bar.Y + 15);
+                if (Width >= 1180) g.DrawString(Loc.T("K2 — overlay settings"), fSmall, br, 440, bar.Y + 15);
             }
             rectCancel = new Rectangle(Width - 470, bar.Y + 6, 110, 32);
             rectApply = new Rectangle(Width - 350, bar.Y + 6, 140, 32);
             rectApplyClose = new Rectangle(Width - 200, bar.Y + 6, 184, 32);
-            FooterBtn(g, rectCancel, "Отмена");
+            FooterBtn(g, rectCancel, "Cancel");
             // «Применить» — применяет, оставляя окно открытым
             using (Brush b = new SolidBrush(diff > 0 ? AccDim : CtlBack)) FillRound(g, rectApply, 6, b);
             using (Pen p = new Pen(diff > 0 ? Acc : CtlBorder)) DrawRound(g, p, rectApply, 6);
-            TextRenderer.DrawText(g, "Применить", fValue, rectApply,
+            TextRenderer.DrawText(g, Loc.T("Apply"), fValue, rectApply,
                 diff > 0 ? Color.White : Color.FromArgb(110, 130, 128),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             // «Применить и закрыть» — основная кнопка
             using (Brush b = new SolidBrush(diff > 0 ? Acc : AccDim)) FillRound(g, rectApplyClose, 6, b);
-            TextRenderer.DrawText(g, "Применить и закрыть", fValue, rectApplyClose,
+            TextRenderer.DrawText(g, Loc.T("Apply and close"), fValue, rectApplyClose,
                 diff > 0 ? Color.FromArgb(4, 22, 20) : Color.FromArgb(110, 130, 128),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
@@ -1197,7 +1203,7 @@ namespace K2
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Не удалось открыть ссылку: " + ex.Message, "K2");
+                MessageBox.Show(Loc.T("Could not open link: ") + ex.Message, "K2");
             }
         }
 
@@ -1228,8 +1234,14 @@ namespace K2
 
         void ApplyNow()
         {
+            bool langChanged = draft.GetS("ui.lang") != Loc.Lang;
             owner.ApplySettings(draft.Clone());
             Invalidate();
+            if (langChanged)
+            {
+                if (RestartPrompt.Ask(this) && !Program.RestartApp())
+                    MessageBox.Show(this, Loc.T("Could not restart K2. Start it manually."), "K2");
+            }
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
@@ -1266,7 +1278,7 @@ namespace K2
         {
             using (SaveFileDialog d = new SaveFileDialog())
             {
-                d.Filter = "K2 настройки (*.ini)|*.ini";
+                d.Filter = Loc.T("K2 settings (*.ini)|*.ini");
                 d.FileName = "k2-settings.ini";
                 if (d.ShowDialog(this) == DialogResult.OK)
                     try { draft.Save2(d.FileName); } catch { }
@@ -1277,11 +1289,11 @@ namespace K2
         {
             using (OpenFileDialog d = new OpenFileDialog())
             {
-                d.Filter = "K2 настройки (*.ini)|*.ini";
+                d.Filter = Loc.T("K2 settings (*.ini)|*.ini");
                 if (d.ShowDialog(this) == DialogResult.OK)
                 {
                     try { draft = Settings.LoadFile(d.FileName); }
-                    catch (Exception ex) { MessageBox.Show(this, "Не удалось загрузить файл: " + ex.Message, "K2"); return; }
+                    catch (Exception ex) { MessageBox.Show(this, Loc.T("Could not load file: ") + ex.Message, "K2"); return; }
                     BuildRows();
                     AfterChange();
                 }

@@ -27,7 +27,7 @@ namespace K2
         public HistoryForm(Stats stats)
         {
             this.stats = stats;
-            Text = "K2 — история";
+            Text = Loc.T("K2 — History");
             FormBorderStyle = FormBorderStyle.None;
             BackColor = BackC;
             TopMost = true;
@@ -72,15 +72,15 @@ namespace K2
             g.Clear(BackC);
             float x = 14 * S, w = ClientSize.Width - 28 * S;
             float y = 12 * S;
-            TextRenderer.DrawText(g, "История за " + PeriodText(), fHead, new Rectangle((int)x, (int)y, (int)(w * 0.7f), (int)(22 * S)),
+            TextRenderer.DrawText(g, Loc.T("History for ") + PeriodText(), fHead, new Rectangle((int)x, (int)y, (int)(w * 0.7f), (int)(22 * S)),
                 TextC, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
             closeRect = new RectangleF(x + w - 20 * S, y, 20 * S, 20 * S);
             using (Brush b = new SolidBrush(TextC)) g.DrawString("✕", fHead, b, closeRect.X, closeRect.Y);
 
             y += 24 * S;
-            y = Legend(g, x, y, "загр CPU", CpuC); y = Legend(g, x + 110 * S, y, "загр GPU", GpuC);
+            y = Legend(g, x, y, Loc.T("CPU load"), CpuC); y = Legend(g, x + 110 * S, y, Loc.T("GPU load"), GpuC);
             Legend(g, x + 230 * S, y - 16 * S, "t° CPU", TempC);
-            Legend(g, x + 330 * S, y - 16 * S, "ОЗУ %", RamC);
+            Legend(g, x + 330 * S, y - 16 * S, Loc.T("RAM %"), RamC);
 
             float cx = x + 28 * S, cy = y + 4 * S;
             float cw = w - 28 * S, ch = ClientSize.Height - cy - 22 * S;
@@ -112,9 +112,9 @@ namespace K2
         string PeriodText()
         {
             double sec = Stats.HistMax * Math.Max(250, stats.IntervalMs) / 1000.0;
-            if (sec < 90) return Math.Round(sec) + " с";
+            if (sec < 90) return Math.Round(sec) + Loc.T(" s");
             double min = sec / 60.0;
-            return min.ToString("0.#", CultureInfo.GetCultureInfo("ru-RU")) + " мин";
+            return min.ToString("0.#", Loc.Culture) + Loc.T(" min");
         }
 
         void Series(Graphics g, List<Stats.Pt> h, float cx, float cy, float cw, float ch, bool cpu, bool temp, Color c)

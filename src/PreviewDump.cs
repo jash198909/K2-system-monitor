@@ -20,6 +20,7 @@ namespace K2
                 else if (args[i].EndsWith(".png", StringComparison.OrdinalIgnoreCase)) outp = args[i];
             }
             Settings st = ini != null ? Settings.LoadFile(ini) : Settings.Load();
+            Loc.Set(st.GetS("ui.lang"));
             Snapshot s = Monitor.MakeFake();
             Stats stats = new Stats();
             for (int i = 0; i < 40; i++) stats.Update(s);

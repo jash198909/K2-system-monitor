@@ -10,7 +10,7 @@ namespace K2
     // Параметризованный рендер оверлея: используется и главным окном, и превью настроек
     public class OverlayDraw
     {
-        public static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
+        public static CultureInfo Cul { get { return Loc.Culture; } }
 
         // палитра оверлея
         static readonly Color BackC = Color.FromArgb(42, 42, 46);
@@ -141,18 +141,18 @@ namespace K2
             if (s.Fps == null && st.GetB("fps.hideNa")) return false;
             Header(x, cw, "FPS", FpsBig());
             List<string> parts = new List<string>();
-            if (st.GetB("fps.avg")) parts.Add("AVG: " + (s.FpsAvg != null ? ((int)s.FpsAvg.Value).ToString(Ru) : "—"));
-            if (st.GetB("fps.low1") && s.FpsLow1 != null) parts.Add("1% Low: " + ((int)s.FpsLow1.Value).ToString(Ru));
-            if (st.GetB("fps.low01") && s.FpsLow01 != null) parts.Add("0.1% Low: " + ((int)s.FpsLow01.Value).ToString(Ru));
-            if (st.GetB("fps.lat") && s.FpsLatency != null) parts.Add("Кадр: " + s.FpsLatency.Value.ToString("0.0", Ru) + " мс");
+            if (st.GetB("fps.avg")) parts.Add("AVG: " + (s.FpsAvg != null ? ((int)s.FpsAvg.Value).ToString(Cul) : "—"));
+            if (st.GetB("fps.low1") && s.FpsLow1 != null) parts.Add("1% Low: " + ((int)s.FpsLow1.Value).ToString(Cul));
+            if (st.GetB("fps.low01") && s.FpsLow01 != null) parts.Add("0.1% Low: " + ((int)s.FpsLow01.Value).ToString(Cul));
+            if (st.GetB("fps.lat") && s.FpsLatency != null) parts.Add(Loc.T("Frame: ") + s.FpsLatency.Value.ToString("0.0", Cul) + Loc.T(" ms"));
             if (parts.Count > 0) SubRow(string.Join("   ", parts.ToArray()));
-            if (st.GetB("fps.proc") && s.FgProc.Length > 0) SubRow("Окно: " + s.FgProc);
+            if (st.GetB("fps.proc") && s.FgProc.Length > 0) SubRow(Loc.T("Window: ") + s.FgProc);
             if (st.GetB("fps.api"))
             {
                 string meta = s.Resolution;
                 if (s.RenderApi.Length > 0) meta += (meta.Length > 0 ? " · " : "") + s.RenderApi;
                 if (meta.Length > 0) SubRow(meta);
-                if (s.PresentMode.Length > 0) SubRow("Режим: " + ShortPresentMode(s.PresentMode));
+                if (s.PresentMode.Length > 0) SubRow(Loc.T("Mode: ") + ShortPresentMode(s.PresentMode));
             }
             Sep();
             return true;
@@ -160,24 +160,24 @@ namespace K2
 
         string FpsBig()
         {
-            return s.Fps != null ? ((int)s.Fps.Value).ToString(Ru) : "N/A";
+            return s.Fps != null ? ((int)s.Fps.Value).ToString(Cul) : "N/A";
         }
 
         bool DrawGpu(float x, float cw)
         {
             if (!st.GetB("gpu.show")) return false;
-            Header(x, cw, s.GpuName.Length == 0 ? "Видеокарта" : s.GpuName, null);
-            if (st.GetB("gpu.load")) Row("Загрузка", Pct(s.GpuLoad), LoadColored(s.GpuLoad, st.GetB("gpu.loadcolor")));
-            if (st.GetB("gpu.temp")) Row("Температура", Temp(s.GpuTemp), TempColored(s.GpuTemp, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
-            if (st.GetB("gpu.hotspot")) Row("Температура Hotspot", Temp(s.GpuHotspot), TempColored(s.GpuHotspot, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
-            if (st.GetB("gpu.memtemp")) Row("Температура памяти", Temp(s.GpuMemTemp), TempColored(s.GpuMemTemp, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
-            if (st.GetB("gpu.clock")) Row("Частота", Freq(s.GpuClock), ValueC);
-            if (st.GetB("gpu.memclock")) Row("Память GPU", Freq(s.GpuMemClock), ValueC);
-            if (st.GetB("gpu.volt")) Row("Напряжение", s.GpuVolt != null ? s.GpuVolt.Value.ToString("0.000", Ru) + " В" : "—", ValueC);
-            if (st.GetB("gpu.power")) Row("Потребление", W(s.GpuPower), ValueC);
-            if (st.GetB("gpu.fanrpm")) Row("Обороты вент.", s.GpuFanRpm != null ? ((int)s.GpuFanRpm.Value).ToString(Ru) + " об/мин" : "—", ValueC);
-            if (st.GetB("gpu.fanpct")) Row("Обороты вент. в %", Pct(s.GpuFanPct), ValueC);
-            if (st.GetB("gpu.vram")) Row("Видеопамять", Mem(s.GpuMemUsedGb, s.GpuMemTotalGb), ValueC);
+            Header(x, cw, s.GpuName.Length == 0 ? "GPU" : s.GpuName, null);
+            if (st.GetB("gpu.load")) Row("Load", Pct(s.GpuLoad), LoadColored(s.GpuLoad, st.GetB("gpu.loadcolor")));
+            if (st.GetB("gpu.temp")) Row("Temperature", Temp(s.GpuTemp), TempColored(s.GpuTemp, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
+            if (st.GetB("gpu.hotspot")) Row("Hotspot", Temp(s.GpuHotspot), TempColored(s.GpuHotspot, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
+            if (st.GetB("gpu.memtemp")) Row("Memory temperature", Temp(s.GpuMemTemp), TempColored(s.GpuMemTemp, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
+            if (st.GetB("gpu.clock")) Row("Clock", Freq(s.GpuClock), ValueC);
+            if (st.GetB("gpu.memclock")) Row("Memory clock", Freq(s.GpuMemClock), ValueC);
+            if (st.GetB("gpu.volt")) Row("Voltage", s.GpuVolt != null ? s.GpuVolt.Value.ToString("0.000", Cul) + Loc.T(" V") : "—", ValueC);
+            if (st.GetB("gpu.power")) Row("Power", W(s.GpuPower), ValueC);
+            if (st.GetB("gpu.fanrpm")) Row("Fan speed", s.GpuFanRpm != null ? ((int)s.GpuFanRpm.Value).ToString(Cul) + Loc.T(" RPM") : "—", ValueC);
+            if (st.GetB("gpu.fanpct")) Row("Fan speed %", Pct(s.GpuFanPct), ValueC);
+            if (st.GetB("gpu.vram")) Row("VRAM", Mem(s.GpuMemUsedGb, s.GpuMemTotalGb), ValueC);
             Sep();
             return true;
         }
@@ -185,16 +185,16 @@ namespace K2
         bool DrawCpu(float x, float cw)
         {
             if (!st.GetB("cpu.show")) return false;
-            Header(x, cw, s.CpuName.Length == 0 ? "Процессор" : s.CpuName, null);
-            if (st.GetB("cpu.load")) Row("Загрузка", Pct(s.CpuLoad), LoadColored(s.CpuLoad, st.GetB("cpu.loadcolor")));
-            if (st.GetB("cpu.temp")) Row("Температура", Temp(s.CpuTemp), TempColored(s.CpuTemp, st.GetI("cpu.warn"), st.GetI("cpu.crit")));
-            if (st.GetB("cpu.ccd")) Row("Температуры ядер", s.CpuCoreTempMin != null
+            Header(x, cw, s.CpuName.Length == 0 ? "CPU" : s.CpuName, null);
+            if (st.GetB("cpu.load")) Row("Load", Pct(s.CpuLoad), LoadColored(s.CpuLoad, st.GetB("cpu.loadcolor")));
+            if (st.GetB("cpu.temp")) Row("Temperature", Temp(s.CpuTemp), TempColored(s.CpuTemp, st.GetI("cpu.warn"), st.GetI("cpu.crit")));
+            if (st.GetB("cpu.ccd")) Row("Core temperatures", s.CpuCoreTempMin != null
                 ? Temp(s.CpuCoreTempMin) + "–" + Temp(s.CpuCoreTempMax) : "—", ValueC);
-            if (st.GetB("cpu.clock")) Row("Частота (макс.)", Freq(s.CpuFreq), ValueC);
-            if (st.GetB("cpu.eff")) Row("Частота (эфф.)", Freq(s.CpuEffFreq), ValueC);
-            if (st.GetB("cpu.power")) Row("Потребление", W(s.CpuPower), ValueC);
-            if (st.GetB("cpu.fanrpm")) Row("Обороты вент.", s.CpuFanRpm != null ? ((int)s.CpuFanRpm.Value).ToString(Ru) + " об/мин" : "—", ValueC);
-            if (st.GetB("cpu.fanpct")) Row("Обороты вент. в %", Pct(s.CpuFanPct), ValueC);
+            if (st.GetB("cpu.clock")) Row("Clock (max.)", Freq(s.CpuFreq), ValueC);
+            if (st.GetB("cpu.eff")) Row("Clock (eff.)", Freq(s.CpuEffFreq), ValueC);
+            if (st.GetB("cpu.power")) Row("Power", W(s.CpuPower), ValueC);
+            if (st.GetB("cpu.fanrpm")) Row("Fan speed", s.CpuFanRpm != null ? ((int)s.CpuFanRpm.Value).ToString(Cul) + Loc.T(" RPM") : "—", ValueC);
+            if (st.GetB("cpu.fanpct")) Row("Fan speed %", Pct(s.CpuFanPct), ValueC);
 
             // таблица частот по ядрам: левая половина / правая половина
             int n = s.CoreFreqs.Count;
@@ -223,17 +223,17 @@ namespace K2
         bool DrawRam(float x, float cw)
         {
             if (!st.GetB("ram.show")) return false;
-            Header(x, cw, "ОЗУ", null);
+            Header(x, cw, "RAM", null);
             string fmt = st.GetS("ram.format");
             if (st.GetB("ram.used"))
             {
                 string v;
                 if (fmt == "used") v = Mem(s.RamUsedGb, null);
-                else if (fmt == "pct") v = ((int)s.RamPct).ToString(Ru) + " %";
+                else if (fmt == "pct") v = ((int)s.RamPct).ToString(Cul) + " %";
                 else v = Mem(s.RamUsedGb, s.RamTotalGb);
-                Row("Использовано", v, ValueC);
+                Row("Used", v, ValueC);
             }
-            if (st.GetB("ram.load")) Row("Загрузка", ((int)s.RamPct).ToString(Ru) + " %", ValueC);
+            if (st.GetB("ram.load")) Row("Load", ((int)s.RamPct).ToString(Cul) + " %", ValueC);
             double? sp = s.RamSpeedMHz;
             string mode = st.GetS("ram.speedMode");
             if (mode == "manual") sp = st.GetI("ram.speedManual");
@@ -243,8 +243,8 @@ namespace K2
                 if (cap != null && sp != null && sp.Value > cap.Value) sp = cap;
             }
             if (st.GetB("ram.speed") && sp != null)
-                Row("Скорость", ((int)sp.Value).ToString(Ru) + " МГц", ValueC);
-            if (st.GetB("ram.dimmt") && s.RamDimmTemp != null) Row("Температура плашек", Temp(s.RamDimmTemp), TempColored(s.RamDimmTemp, 75, 85));
+                Row("Speed", ((int)sp.Value).ToString(Cul) + Loc.T(" MHz"), ValueC);
+            if (st.GetB("ram.dimmt") && s.RamDimmTemp != null) Row("DIMM temperature", Temp(s.RamDimmTemp), TempColored(s.RamDimmTemp, 75, 85));
             Sep();
             return true;
         }
@@ -252,14 +252,14 @@ namespace K2
         bool DrawStat(float x, float cw)
         {
             if (!st.GetB("stat.show") || stats == null) return false;
-            Header(x, cw, "Статистика", stats.Paused ? "пауза" : null);
+            Header(x, cw, "Statistics", stats.Paused ? "paused" : null);
             StatRow("stat.gput", "Min/Max GPU", "gput", true);
             StatRow("stat.cput", "Min/Max CPU", "cput", true);
             StatRow("stat.vramt", "Min/Max VRAM", "vramt", true);
             StatRow("stat.hotspot", "Min/Max Hotspot", "hotspot", true);
-            StatRow("stat.gpuv", "Min/Max напряж. GPU", "gpuv", false, " В");
-            StatRow("stat.gpup", "Min/Max потр. GPU", "gpup", false, " Вт");
-            StatRow("stat.cpup", "Min/Max потр. CPU", "cpup", false, " Вт");
+            StatRow("stat.gpuv", "Min/Max GPU voltage", "gpuv", false, Loc.T(" V"));
+            StatRow("stat.gpup", "Min/Max GPU power", "gpup", false, Loc.T(" W"));
+            StatRow("stat.cpup", "Min/Max CPU power", "cpup", false, Loc.T(" W"));
             Sep();
             return true;
         }
@@ -271,6 +271,7 @@ namespace K2
             string v = stats.Get(statKey, mode);
             if (v == null) return;
             if (temp) v = TempPair(statKey, mode);
+            else if (suffix.Length > 0) v += suffix;
             Row(label, v, OrangeAccent());
         }
 
@@ -291,8 +292,8 @@ namespace K2
             for (int i = 0; i < seg.Length; i++)
             {
                 double d;
-                if (double.TryParse(seg[i].Trim(), NumberStyles.Float, Ru, out d))
-                    seg[i] = " " + ((d * 9.0 / 5.0 + 32.0)).ToString("0.0", Ru) + " ";
+                if (double.TryParse(seg[i].Trim(), NumberStyles.Float, Cul, out d))
+                    seg[i] = " " + ((d * 9.0 / 5.0 + 32.0)).ToString("0.0", Cul) + " ";
             }
             return string.Join("/", seg) + " °F";
         }
@@ -353,9 +354,9 @@ namespace K2
 
                 if (st.GetB("ft.showtime"))
                 {
-                    string msText = "— мс";
-                    if (s.FpsLatency != null) msText = s.FpsLatency.Value.ToString("0.0", Ru) + " мс";
-                    else if (hist != null && hist.Count > 0) msText = hist[hist.Count - 1].ToString(Ru) + " мс";
+                    string msText = Loc.T("— ms");
+                    if (s.FpsLatency != null) msText = s.FpsLatency.Value.ToString("0.0", Cul) + Loc.T(" ms");
+                    else if (hist != null && hist.Count > 0) msText = hist[hist.Count - 1].ToString(Cul) + Loc.T(" ms");
                     Text(gx, y + h - labelH - pad, cw - 2 * pad, msText, fC, FtgRed, false);
                 }
             }
@@ -369,6 +370,7 @@ namespace K2
         void Header(float x, float cw, string text, string bigValue)
         {
             int h = (int)HdrH();
+            text = Loc.T(text);
             Draw(g2 => GText(g2, text, fH, new Rectangle((int)x, (int)y, (int)(cw * 0.62f), h), HeaderC, false));
             if (bigValue != null)
                 Draw(g2 => GText(g2, bigValue, fBig, new Rectangle((int)x, (int)y, (int)cw, h), OrangeAccent(), true));
@@ -380,7 +382,7 @@ namespace K2
             int h = (int)RowH();
             float x = Pad();
             float cw = CurrentW;
-            Draw(g2 => GText(g2, label, fL, new Rectangle((int)x, (int)y, (int)(cw * 0.7f), h), LabelC, false));
+            Draw(g2 => GText(g2, Loc.T(label), fL, new Rectangle((int)x, (int)y, (int)(cw * 0.7f), h), LabelC, false));
             Draw(g2 => GText(g2, value, fV, new Rectangle((int)x, (int)y, (int)cw, h), vc, true));
             y += RowH();
         }
@@ -396,7 +398,7 @@ namespace K2
         void CoreCell(float x, float w, int idx)
         {
             if (idx >= s.CoreFreqs.Count) return;
-            string label = "Ядро " + (idx + 1).ToString("00", Ru) + ":";
+            string label = Loc.T("Core ") + (idx + 1).ToString("00", Cul) + ":";
             int hh = (int)CoreH();
             float cx = Pad();
             Draw(g2 => GText(g2, label, fC, new Rectangle((int)x, (int)y, (int)(w * 0.55f), hh), LabelC, false));
@@ -467,18 +469,18 @@ namespace K2
         {
             if (v == null) return "—";
             if (st.GetS("ov.tempUnit") == "F")
-                return (v.Value * 9.0 / 5.0 + 32.0).ToString("0", Ru) + " °F";
-            return v.Value.ToString("0", Ru) + " °C";
+                return (v.Value * 9.0 / 5.0 + 32.0).ToString("0", Cul) + " °F";
+            return v.Value.ToString("0", Cul) + " °C";
         }
-        string Pct(double? v) { return v == null ? "—" : v.Value.ToString("0", Ru) + " %"; }
-        string W(double? v) { return v == null ? "—" : v.Value.ToString("0.0", Ru) + " Вт"; }
+        string Pct(double? v) { return v == null ? "—" : v.Value.ToString("0", Cul) + " %"; }
+        string W(double? v) { return v == null ? "—" : v.Value.ToString("0.0", Cul) + Loc.T(" W"); }
         string Freq(double? mhz)
         {
             if (mhz == null) return "—";
-            if (st.GetS("ov.freqUnit") == "MHz") return ((int)Math.Round(mhz.Value)).ToString(Ru) + " МГц";
+            if (st.GetS("ov.freqUnit") == "MHz") return ((int)Math.Round(mhz.Value)).ToString(Cul) + Loc.T(" MHz");
             // ниже 1 ГГц показываем МГц, иначе получается «0,0 ГГц»
-            if (mhz.Value < 1000) return ((int)Math.Round(mhz.Value)).ToString(Ru) + " МГц";
-            return (mhz.Value / 1000.0).ToString("0.00", Ru) + " ГГц";
+            if (mhz.Value < 1000) return ((int)Math.Round(mhz.Value)).ToString(Cul) + Loc.T(" MHz");
+            return (mhz.Value / 1000.0).ToString("0.00", Cul) + Loc.T(" GHz");
         }
 
         static string ShortPresentMode(string mode)
@@ -490,13 +492,13 @@ namespace K2
         {
             if (used == null) return "—";
             bool mb = st.GetS("ov.memUnit") == "MB";
-            string u = mb ? " МБ" : " ГБ";
+            string u = mb ? Loc.T(" MB") : Loc.T(" GB");
             double uu = mb ? used.Value * 1024 : used.Value;
-            if (total == null) return uu.ToString(mb ? "0" : "0.0", Ru) + u;
+            if (total == null) return uu.ToString(mb ? "0" : "0.0", Cul) + u;
             double tt = mb ? total.Value * 1024 : total.Value;
-            return uu.ToString(mb ? "0" : "0.0", Ru) + " / " + tt.ToString(mb ? "0" : "0.0", Ru) + u;
+            return uu.ToString(mb ? "0" : "0.0", Cul) + " / " + tt.ToString(mb ? "0" : "0.0", Cul) + u;
         }
-        string Volt(double? v) { return v == null ? "—" : v.Value.ToString("0.000", Ru) + " В"; }
+        string Volt(double? v) { return v == null ? "—" : v.Value.ToString("0.000", Cul) + Loc.T(" V"); }
 
         Color TempColored(double? t, int warn, int crit)
         {

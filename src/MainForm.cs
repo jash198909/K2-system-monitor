@@ -8,6 +8,7 @@ using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -15,9 +16,54 @@ namespace K2
 {
     static class Autostart
     {
+        // Автозапуск через Планировщик задач: K2 требует прав администратора,
+        // а обычная запись в HKCU\...\Run такие программы при входе не запускает.
+        const string TaskName = "K2 System Monitor";
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-        public static bool IsEnabled()
+        public static void Set(bool on)
+        {
+            if (on)
+            {
+                if (!TaskCurrent() && !CreateTask())
+                    WriteRunValue();   // запасной вариант, если планировщик недоступен
+                else
+                    RemoveRunValue();
+            }
+            else
+            {
+                DeleteTask();
+                RemoveRunValue();
+            }
+        }
+
+        static bool TaskCurrent()
+        {
+            string xml;
+            if (RunSchTasks("/Query /TN \"" + TaskName + "\" /XML", out xml) != 0) return false;
+            return xml.IndexOf(Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        static bool CreateTask()
+        {
+            string file = Path.Combine(Path.GetTempPath(), "k2-autostart.xml");
+            try
+            {
+                File.WriteAllText(file, TaskXml(), Encoding.Unicode);
+                string output;
+                return RunSchTasks("/Create /TN \"" + TaskName + "\" /XML \"" + file + "\" /F", out output) == 0;
+            }
+            catch (Exception ex) { Log(ex); return false; }
+            finally { try { File.Delete(file); } catch { } }
+        }
+
+        static void DeleteTask()
+        {
+            string output;
+            RunSchTasks("/Delete /TN \"" + TaskName + "\" /F", out output);
+        }
+
+        static bool RunValueExists()
         {
             try
             {
@@ -27,18 +73,82 @@ namespace K2
             catch { return false; }
         }
 
-        public static void Set(bool on)
+        static void WriteRunValue()
         {
             try
             {
                 using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey))
                 {
                     if (k == null) return;
-                    if (on) k.SetValue("K2", Application.ExecutablePath);
-                    else k.DeleteValue("K2", false);
+                    k.SetValue("K2", "\"" + Application.ExecutablePath + "\"");
                 }
             }
+            catch (Exception ex) { Log(ex); }
+        }
+
+        static void RemoveRunValue()
+        {
+            if (!RunValueExists()) return;
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, true))
+                    if (k != null) k.DeleteValue("K2", false);
+            }
             catch { }
+        }
+
+        static string TaskXml()
+        {
+            string user = System.Security.SecurityElement.Escape(Environment.UserDomainName + "\\" + Environment.UserName);
+            string exe = System.Security.SecurityElement.Escape(Application.ExecutablePath);
+            return "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n" +
+                "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n" +
+                "  <RegistrationInfo><Description>K2 system monitor overlay</Description></RegistrationInfo>\r\n" +
+                "  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + user + "</UserId></LogonTrigger></Triggers>\r\n" +
+                "  <Principals><Principal id=\"Author\"><UserId>" + user + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>\r\n" +
+                "  <Settings>\r\n" +
+                "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\r\n" +
+                "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\r\n" +
+                "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\r\n" +
+                "    <AllowHardTerminate>true</AllowHardTerminate>\r\n" +
+                "    <StartWhenAvailable>true</StartWhenAvailable>\r\n" +
+                "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>\r\n" +
+                "    <IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings>\r\n" +
+                "    <AllowStartOnDemand>true</AllowStartOnDemand>\r\n" +
+                "    <Enabled>true</Enabled>\r\n" +
+                "    <Hidden>false</Hidden>\r\n" +
+                "    <RunOnlyIfIdle>false</RunOnlyIfIdle>\r\n" +
+                "    <WakeToRun>false</WakeToRun>\r\n" +
+                "    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\r\n" +
+                "    <Priority>7</Priority>\r\n" +
+                "  </Settings>\r\n" +
+                "  <Actions Context=\"Author\"><Exec><Command>" + exe + "</Command></Exec></Actions>\r\n" +
+                "</Task>";
+        }
+
+        static int RunSchTasks(string args, out string output)
+        {
+            output = "";
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo("schtasks.exe", args);
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                using (Process p = Process.Start(psi))
+                {
+                    output = p.StandardOutput.ReadToEnd();
+                    p.WaitForExit(15000);
+                    return p.HasExited ? p.ExitCode : -1;
+                }
+            }
+            catch (Exception ex) { Log(ex); return -1; }
+        }
+
+        static void Log(Exception ex)
+        {
+            try { File.AppendAllText(Monitor.LogPath("error.txt"), DateTime.Now + " autostart: " + ex + "\r\n"); } catch { }
         }
     }
 
@@ -120,6 +230,7 @@ namespace K2
             try { Icon = AppIcon(); } catch { }
             try { using (Process p = Process.GetCurrentProcess()) selfProc = p.ProcessName; } catch { }
             St = Settings.Load();
+            Loc.Set(St.GetS("ui.lang"));
             if (SanitizeGameLists(St)) St.Save();
         }
 
@@ -132,6 +243,7 @@ namespace K2
             Monitor.LogCleanup();
             BuildTray();
             ContextMenuStrip = menu;
+            try { Autostart.Set(St.GetB("ov.autostart")); } catch { }
 
             timer = new Timer();
             timer.Interval = Math.Max(250, St.GetI("ov.interval"));
@@ -409,11 +521,11 @@ namespace K2
             menu.Renderer = new DarkMenuRenderer();
             menu.BackColor = Color.FromArgb(16, 22, 30);
             menu.ForeColor = Color.FromArgb(232, 240, 245);
-            ToolStripMenuItem show = new ToolStripMenuItem("Показать/скрыть оверлей");
+            ToolStripMenuItem show = new ToolStripMenuItem(Loc.T("Show/hide overlay"));
             show.Click += delegate { hiddenByUser = !hiddenByUser; UpdateVisible(); };
             menu.Items.Add(show);
 
-            miEnabled = new ToolStripMenuItem("Оверлей включён (мастер)");
+            miEnabled = new ToolStripMenuItem(Loc.T("Overlay enabled (master)"));
             miEnabled.CheckOnClick = true;
             miEnabled.Checked = St.GetB("ov.enabled");
             miEnabled.CheckedChanged += delegate
@@ -426,33 +538,52 @@ namespace K2
                 }
             };
             menu.Items.Add(miEnabled);
-            ToolStripMenuItem open = new ToolStripMenuItem("Настройки…");
+            ToolStripMenuItem open = new ToolStripMenuItem(Loc.T("Settings…"));
             open.ShortcutKeys = Keys.F10;
             open.Click += delegate { OpenSettings(); };
             menu.Items.Add(open);
 
-            ToolStripMenuItem top = new ToolStripMenuItem("Поверх окон");
+            ToolStripMenuItem top = new ToolStripMenuItem(Loc.T("Always on top"));
             top.CheckOnClick = true;
             top.Checked = TopMost;
             top.CheckedChanged += delegate { TopMost = top.Checked; };
             menu.Items.Add(top);
 
-            ToolStripMenuItem excl = new ToolStripMenuItem("Исключения «только игра»");
-            ToolStripMenuItem itAlways = new ToolStripMenuItem("Пометить активное окно: ВСЕГДА игра");
+            ToolStripMenuItem langMenu = new ToolStripMenuItem(Loc.T("Language"));
+            ToolStripMenuItem langEn = new ToolStripMenuItem("English");
+            ToolStripMenuItem langRu = new ToolStripMenuItem("Русский");
+            langEn.Checked = Loc.Lang == "en";
+            langRu.Checked = Loc.Lang == "ru";
+            langEn.Click += delegate
+            {
+                langEn.Checked = true; langRu.Checked = false;
+                SetLanguage("en");
+            };
+            langRu.Click += delegate
+            {
+                langEn.Checked = false; langRu.Checked = true;
+                SetLanguage("ru");
+            };
+            langMenu.DropDownItems.Add(langEn);
+            langMenu.DropDownItems.Add(langRu);
+            menu.Items.Add(langMenu);
+
+            ToolStripMenuItem excl = new ToolStripMenuItem(Loc.T("\"Game only\" exceptions"));
+            ToolStripMenuItem itAlways = new ToolStripMenuItem(Loc.T("Mark active window: ALWAYS a game"));
             itAlways.Click += delegate { MarkGame("ov.alwaysGame"); };
-            ToolStripMenuItem itNever = new ToolStripMenuItem("Пометить активное окно: НИКОГДА не игра");
+            ToolStripMenuItem itNever = new ToolStripMenuItem(Loc.T("Mark active window: NEVER a game"));
             itNever.Click += delegate { MarkGame("ov.neverGame"); };
             excl.DropDownItems.Add(itAlways);
             excl.DropDownItems.Add(itNever);
             menu.Items.Add(excl);
 
-            miInterval = new ToolStripMenuItem("Интервал обновления");
+            miInterval = new ToolStripMenuItem(Loc.T("Update interval"));
             int[] ms = new int[] { 250, 500, 1000, 2000, 5000 };
             foreach (int msec in ms)
             {
                 string label = msec < 1000
-                    ? msec.ToString(CultureInfo.GetCultureInfo("ru-RU")) + " мс"
-                    : (msec / 1000.0).ToString("0.#", CultureInfo.GetCultureInfo("ru-RU")) + " с";
+                    ? msec.ToString(Loc.Culture) + Loc.T(" ms")
+                    : (msec / 1000.0).ToString("0.#", Loc.Culture) + Loc.T(" s");
                 ToolStripMenuItem it = new ToolStripMenuItem(label);
                 it.Tag = msec;
                 it.Click += delegate (object s, EventArgs e2)
@@ -470,16 +601,24 @@ namespace K2
             menu.Items.Add(miInterval);
             menu.Opening += delegate { SyncIntervalChecks(); };
             menu.Items.Add(new ToolStripSeparator());
-            ToolStripMenuItem exit = new ToolStripMenuItem("Выход");
+            ToolStripMenuItem exit = new ToolStripMenuItem(Loc.T("Exit"));
             exit.Click += delegate { Close(); };
             menu.Items.Add(exit);
 
             tray = new NotifyIcon();
             tray.Icon = MakeIcon();
-            tray.Text = "K2 — настройки: F10 (двойной клик — показать)";
+            tray.Text = Loc.T("K2 — settings: F10 (double-click to show)");
             tray.ContextMenuStrip = menu;
             tray.DoubleClick += delegate { hiddenByUser = false; Visible = true; Activate(); };
             tray.Visible = true;
+        }
+
+        void SetLanguage(string lang)
+        {
+            St.Set("ui.lang", lang);
+            St.Save();
+            if (RestartPrompt.Ask(null) && !Program.RestartApp())
+                MessageBox.Show(Loc.T("Could not restart K2. Start it manually."), "K2");
         }
 
         string ForegroundProcess()
@@ -612,7 +751,7 @@ namespace K2
             if (IsShellProcess(proc)) proc = cur.FgProc;
             if (IsShellProcess(proc))
             {
-                MessageBox.Show("Не удалось определить активное окно игры. Откройте игру и повторите.", "K2");
+                MessageBox.Show(Loc.T("Could not detect the game window. Start the game and try again."), "K2");
                 return;
             }
             string list = St.GetS(key);
@@ -787,16 +926,16 @@ namespace K2
         {
             if (!St.GetB("ov.checkStart")) return;
             List<string> missing = new List<string>();
-            if (s.CpuTemp == null) missing.Add("температура CPU");
-            if (s.GpuTemp == null) missing.Add("температура GPU");
-            if (s.CpuPower == null) missing.Add("потребление CPU");
-            if (s.CpuFreq == null) missing.Add("частоты ядер");
+            if (s.CpuTemp == null) missing.Add(Loc.T("CPU temperature"));
+            if (s.GpuTemp == null) missing.Add(Loc.T("GPU temperature"));
+            if (s.CpuPower == null) missing.Add(Loc.T("CPU power"));
+            if (s.CpuFreq == null) missing.Add(Loc.T("core clocks"));
             if (missing.Count == 0) return;
             try
             {
-                tray.ShowBalloonTip(8000, "K2: не все датчики доступны",
-                    "Нет: " + string.Join(", ", missing.ToArray()) +
-                    ". Проверь UAC/права админа или «Целостность памяти» (HVCI) в Windows Security.",
+                tray.ShowBalloonTip(8000, Loc.T("K2: not all sensors are available"),
+                    Loc.T("Missing: ") + string.Join(", ", missing.ToArray()) +
+                    Loc.T(". Check UAC/admin rights or Memory Integrity (HVCI) in Windows Security."),
                     ToolTipIcon.Warning);
             }
             catch { }
@@ -850,7 +989,7 @@ namespace K2
                             using (StringFormat sf = new StringFormat())
                             {
                                 sf.Alignment = StringAlignment.Center;
-                                g.DrawString("инициализация сенсоров…", f, b,
+                                g.DrawString(Loc.T("initializing sensors…"), f, b,
                                     new RectangleF(0, Height / 2f - 10, Width, 20), sf);
                             }
                         }
@@ -907,7 +1046,7 @@ namespace K2
                 }
                 dragging = true;
                 dragStart = e.Location;
-                tip.SetToolTip(this, "Перетащите, чтобы двигать. Клик по графику — история. ПКМ — меню");
+                tip.SetToolTip(this, Loc.T("Drag to move. Click the graph for history. Right-click for menu"));
             }
             base.OnMouseDown(e);
         }

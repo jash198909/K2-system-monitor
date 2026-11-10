@@ -44,6 +44,7 @@ namespace K2
             switch (k)
             {
                 // общие
+                case "ui.lang": return "en";
                 case "ov.enabled": return "1";
                 case "ov.autostart": return "0";
                 case "ov.checkStart": return "1";
@@ -172,6 +173,7 @@ namespace K2
             if (GetI("cpu.crit") <= GetI("cpu.warn"))
                 Set("cpu.crit", Math.Min(110, GetI("cpu.warn") + 1));
 
+            EnsureOneOf("ui.lang", "en", "ru");
             EnsureOneOf("ov.tempUnit", "C", "F");
             EnsureOneOf("ov.freqUnit", "GHz", "MHz");
             EnsureOneOf("ov.memUnit", "GB", "MB");

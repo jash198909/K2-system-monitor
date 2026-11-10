@@ -74,7 +74,7 @@ namespace K2
 
         static Computer computer;
         static UpdateVisitor visitor = new UpdateVisitor();
-        static readonly CultureInfo Ru = new CultureInfo("ru-RU");
+        static CultureInfo Cul { get { return Loc.Culture; } }
 
         public static string BaseDir()
         {
@@ -106,12 +106,12 @@ namespace K2
                 using (StreamWriter w = new StreamWriter(file, true, new UTF8Encoding(true)))
                 {
                     if (isNew)
-                        w.WriteLine("Время;ЦПУ загр %;ЦПУ t°C;ЦПУ ГГц;ЦПУ Вт;ГПУ загр %;ГПУ t°C;ГПУ Вт;ГПУ вент %;VRAM ГБ;ОЗУ ГБ;ОЗУ %");
+                        w.WriteLine(Loc.T("Time;CPU load %;CPU t°C;CPU GHz;CPU W;GPU load %;GPU t°C;GPU W;GPU fan %;VRAM GB;RAM GB;RAM %"));
                     w.WriteLine(string.Join(";",
                         DateTime.Now.ToString("HH:mm:ss"),
                         Fix(s.CpuLoad, 0), Fix(s.CpuTemp, 0), FmtGhz(s.CpuFreq), Fix(s.CpuPower, 1),
                         Fix(s.GpuLoad, 0), Fix(s.GpuTemp, 0), Fix(s.GpuPower, 1), Fix(s.GpuFanPct, 0),
-                        Fix(s.GpuMemUsedGb, 1), s.RamUsedGb.ToString("0.0", Ru), ((int)s.RamPct).ToString(Ru)));
+                        Fix(s.GpuMemUsedGb, 1), s.RamUsedGb.ToString("0.0", Cul), ((int)s.RamPct).ToString(Cul)));
                 }
             }
             catch { }
@@ -131,13 +131,13 @@ namespace K2
         static string Fix(double? v, int decimals)
         {
             if (v == null) return "";
-            return v.Value.ToString(decimals == 0 ? "0" : "0.0", Ru);
+            return v.Value.ToString(decimals == 0 ? "0" : "0.0", Cul);
         }
 
         static string FmtGhz(double? mhz)
         {
             if (mhz == null) return "";
-            return (mhz.Value / 1000.0).ToString("0.0", Ru);
+            return (mhz.Value / 1000.0).ToString("0.0", Cul);
         }
 
         static Computer OpenComputer()
@@ -604,27 +604,27 @@ namespace K2
         public static string FmtGHz(double? mhz)
         {
             if (mhz == null) return "—";
-            return ((mhz.Value / 1000.0).ToString("0.0", Ru)) + " ГГц";
+            return ((mhz.Value / 1000.0).ToString("0.0", Cul)) + Loc.T(" GHz");
         }
         public static string FmtPct(double? v)
         {
             if (v == null) return "—";
-            return v.Value.ToString("0", Ru) + " %";
+            return v.Value.ToString("0", Cul) + " %";
         }
         public static string FmtC(double? v)
         {
             if (v == null) return "—";
-            return v.Value.ToString("0", Ru) + " °C";
+            return v.Value.ToString("0", Cul) + " °C";
         }
         public static string FmtW(double? v)
         {
             if (v == null) return "—";
-            return v.Value.ToString("0.0", Ru) + " Вт";
+            return v.Value.ToString("0.0", Cul) + Loc.T(" W");
         }
         public static string FmtGb(double? v)
         {
             if (v == null) return "—";
-            return v.Value.ToString("0.0", Ru) + " ГБ";
+            return v.Value.ToString("0.0", Cul) + Loc.T(" GB");
         }
 
         // ----- sensor dump for diagnostics -----
@@ -634,7 +634,7 @@ namespace K2
             try
             {
                 Computer c = OpenComputer();
-                sb.AppendLine("=== компьютер открыт ===");
+                sb.AppendLine(Loc.T("=== computer opened ==="));
                 foreach (IHardware hw in c.Hardware) DumpHw(hw, 0, sb);
                 c.Close();
             }

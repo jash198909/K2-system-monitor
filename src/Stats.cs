@@ -55,7 +55,7 @@ namespace K2
 
         static string Fmt(double v)
         {
-            return v >= 100 ? v.ToString("0") : v.ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+            return v >= 100 ? v.ToString("0") : v.ToString("0.0", Loc.Culture);
         }
 
         public void Reset()

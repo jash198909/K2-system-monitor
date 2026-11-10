@@ -4,17 +4,6 @@ A lightweight system-monitoring overlay widget for Windows — GPU, CPU (with
 per-core frequency table and per-thread load graph) and RAM, always on top,
 fully configurable.
 
-![K2 overlay](docs/screenshots/overlay.png)
-
-![K2 settings](docs/screenshots/settings.png)
-
-## Download
-
-A portable build is published in
-[Releases](https://github.com/jash198909/K2-system-monitor/releases/latest):
-unpack the ZIP and run `K2.exe` as administrator. To build from source, see
-below.
-
 ## Features
 
 - Dark borderless widget, always on top, draggable, remembers position
@@ -29,11 +18,22 @@ below.
 - Safe limits for every setting: broken/hand-edited INI values are clamped
   instead of crashing the overlay
 - Single-instance protection (a second launch does not duplicate the overlay)
+- Optional autostart at logon through Task Scheduler: starts elevated without a
+  UAC prompt
 - CSV session log (`%LOCALAPPDATA%\K2\log\`), settings export/import
 - All sensor data from
   [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)
 - No telemetry; the only external action is opening the donation link in your
   browser when you click it
+
+## Language
+
+The interface ships in English and Russian. Switch it in
+**Settings → General → Language** or from the tray menu → **Language**.
+The choice is stored as `ui.lang` (`en` / `ru`) in
+`%LOCALAPPDATA%\K2\settings.ini`; K2 offers to restart itself right away
+(button **Restart** / **Перезагрузить**), otherwise the language applies on
+the next start.
 
 ## Requirements
 
@@ -75,9 +75,18 @@ Alt+F7 compact mode, Alt+F11 pause/resume measuring.
   last displayed reading for up to 10 seconds, then the block auto-hides.
 - PresentMon requires elevated rights (K2 already runs as administrator). If
   `tools/PresentMon-2.4.1-x64.exe` is missing, run `resolve.ps1`.
-- The interface is currently Russian; an English localization is planned.
 
 ## Changelog
+
+### 1.3.0
+
+- Added an English interface and a runtime English/Russian language switch
+  (`ui.lang`, Settings → General → Language, tray → Language). Changing the
+  language offers an immediate restart with the new language.
+- Autostart now uses Task Scheduler with the highest available privileges, so
+  K2 starts elevated at logon without a UAC prompt. The task is named
+  `K2 System Monitor` and is created/removed by the "Run at Windows startup"
+  toggle. The old `HKCU\...\Run` value is removed automatically.
 
 ### 1.2.0
 
@@ -90,8 +99,8 @@ Alt+F7 compact mode, Alt+F11 pause/resume measuring.
   are shown in the FPS block.
 - Frequency below 1 GHz is displayed in MHz instead of "0.0 GHz".
 - `resolve.ps1` downloads and SHA-256-verifies PresentMon; MIT notices added.
-- Added a «☕ Автору на кофе» link to the left settings menu under
-  «График времени кадра»; it opens the author's DonationAlerts page.
+- Added a "☕ Support the author" link to the left settings menu under
+  "Frame time graph"; it opens the author's DonationAlerts page.
 
 ### 1.1.14
 
@@ -219,7 +228,7 @@ Alt+F7 compact mode, Alt+F11 pause/resume measuring.
 
 If K2 is useful to you, you can buy the author a coffee via
 [DonationAlerts](https://www.donationalerts.com/r/jash_k2). The same link is
-available in Settings → left menu, under «График времени кадра».
+available in Settings → left menu, under "Frame time graph".
 
 ## Privacy
 
