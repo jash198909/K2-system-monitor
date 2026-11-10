@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -36,6 +37,47 @@ namespace K2
         public void Set(string k, bool v) { kv[k] = v ? "1" : "0"; }
         public void Set(string k, int v) { kv[k] = v.ToString(Inv); }
 
+        public static readonly string[] ColorKeys = new string[]
+        {
+            "color.panel", "color.header", "color.label", "color.value",
+            "color.line", "color.mark", "color.accent", "color.stat",
+            "color.green", "color.yellow", "color.orange", "color.red", "color.ftg",
+            "color.fps.header", "color.fps.label", "color.fps.value",
+            "color.gpu.header", "color.gpu.label", "color.gpu.value",
+            "color.cpu.header", "color.cpu.label", "color.cpu.value",
+            "color.ram.header", "color.ram.label", "color.ram.value",
+            "color.stat.header", "color.stat.label", "color.stat.value",
+            "color.gpu.zones", "color.cpu.zones"
+        };
+
+        public Color GetColor(string k, Color def)
+        {
+            string v = GetS(k);
+            if (!string.IsNullOrEmpty(v))
+            {
+                string[] p = v.Split(',');
+                int r, g, b;
+                if (p.Length == 3 &&
+                    int.TryParse(p[0].Trim(), NumberStyles.Integer, Inv, out r) &&
+                    int.TryParse(p[1].Trim(), NumberStyles.Integer, Inv, out g) &&
+                    int.TryParse(p[2].Trim(), NumberStyles.Integer, Inv, out b))
+                    return Color.FromArgb(C255(r), C255(g), C255(b));
+            }
+            return def;
+        }
+
+        public void SetColor(string k, Color c)
+        {
+            Set(k, c.R.ToString(Inv) + "," + c.G.ToString(Inv) + "," + c.B.ToString(Inv));
+        }
+
+        public void ResetColors()
+        {
+            for (int i = 0; i < ColorKeys.Length; i++) kv.Remove(ColorKeys[i]);
+        }
+
+        static int C255(int v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+
         public List<string> Keys() { return new List<string>(kv.Keys); }
 
         // значения по умолчанию; всё, чего тут нет, считается выключенным/0/""
@@ -71,6 +113,22 @@ namespace K2
                 case "look.fontSize": return "100";
                 case "look.showTime": return "0";
                 case "look.mode": return "float";
+                // цвета оверлея (R,G,B)
+                case "color.panel": return "20,22,26";
+                case "color.header": return "240,240,240";
+                case "color.label": return "166,166,166";
+                case "color.value": return "240,240,240";
+                case "color.line": return "82,82,88";
+                case "color.mark": return "120,120,126";
+                case "color.accent": return "0,191,166";
+                case "color.stat": return "255,170,80";
+                case "color.green": return "46,204,64";
+                case "color.yellow": return "229,198,75";
+                case "color.orange": return "240,140,60";
+                case "color.red": return "230,80,60";
+                case "color.ftg": return "245,45,38";
+                case "color.gpu.zones": return "1";
+                case "color.cpu.zones": return "1";
                 // горячие клавиши (вкл+моды+клавиша)
                 case "hk.show": return "+Alt+F8";
                 case "hk.reset": return "+Alt+F5";

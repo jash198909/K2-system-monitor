@@ -4,6 +4,14 @@ A lightweight system-monitoring overlay widget for Windows — GPU, CPU (with
 per-core frequency table and per-thread load graph) and RAM, always on top,
 fully configurable.
 
+![K2 overlay](docs/screenshots/overlay.png)
+
+![K2 settings](docs/screenshots/settings.png)
+
+![K2 colors](docs/screenshots/colors.png)
+
+![K2 per-block colors](docs/screenshots/colors-blocks.png)
+
 ## Features
 
 - Dark borderless widget, always on top, draggable, remembers position
@@ -15,6 +23,10 @@ fully configurable.
 - Session statistics (min/max), history window (click the core graph)
 - Settings window: block order, units, size, scale, opacity, corner radius,
   fonts, global hotkeys, "game only" mode
+- Overlay color scheme: panel background, headers, labels, values, separators,
+  accents, load/temperature zones and the frame-time graph; each overlay block
+  (FPS, GPU, CPU, RAM, Statistics) can set its own header/label/value colors.
+  A **Defaults** button restores the current look (overlay only)
 - Safe limits for every setting: broken/hand-edited INI values are clamped
   instead of crashing the overlay
 - Single-instance protection (a second launch does not duplicate the overlay)
@@ -77,6 +89,13 @@ Alt+F7 compact mode, Alt+F11 pause/resume measuring.
   `tools/PresentMon-2.4.1-x64.exe` is missing, run `resolve.ps1`.
 
 ## Changelog
+
+### 1.4.0
+
+- Added a **Colors** section in Settings: panel background, base text, accents,
+  load/temperature zones, frame-time graph, and per-block header/label/value
+  colors for FPS, GPU, CPU, RAM and Statistics. A **Defaults** button restores
+  the standard look. Changes affect the overlay only.
 
 ### 1.3.0
 

@@ -155,8 +155,8 @@ namespace K2
     public class MainForm : Form
     {
         static readonly Color BackColor1 = Color.FromArgb(42, 42, 46);
-        // Фон самой панели оверлея (темнее, чем у служебных окон настроек).
-        static readonly Color OverlayBack = Color.FromArgb(20, 22, 26);
+        // Фон самой панели оверлея (настраивается в разделе «Настройки цвета»).
+        Color OverlayPanelColor { get { return St.GetColor("color.panel", Color.FromArgb(20, 22, 26)); } }
 
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
         [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr hWnd, int id);
@@ -972,8 +972,9 @@ namespace K2
                         int bgAlpha = (int)Math.Round(255.0 * (100 - op) / 100.0);
                         if (bgAlpha > 0)
                         {
+                            Color panel = OverlayPanelColor;
                             using (GraphicsPath p = RoundPath(new Rectangle(0, 0, Width - 1, Height - 1), St.GetI("look.radius") * S))
-                            using (Brush b = new SolidBrush(Color.FromArgb(bgAlpha, OverlayBack.R, OverlayBack.G, OverlayBack.B)))
+                            using (Brush b = new SolidBrush(Color.FromArgb(bgAlpha, panel.R, panel.G, panel.B)))
                                 g.FillPath(b, p);
                         }
 

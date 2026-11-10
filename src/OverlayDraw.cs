@@ -12,19 +12,21 @@ namespace K2
     {
         public static CultureInfo Cul { get { return Loc.Culture; } }
 
-        // палитра оверлея
-        static readonly Color BackC = Color.FromArgb(42, 42, 46);
-        static readonly Color HeaderC = Color.FromArgb(240, 240, 240);
-        static readonly Color LabelC = Color.FromArgb(166, 166, 166);
-        static readonly Color ValueC = Color.FromArgb(240, 240, 240);
-        static readonly Color LineC = Color.FromArgb(82, 82, 88);
-        static readonly Color GreenC = Color.FromArgb(46, 204, 64);
-        static readonly Color YellowC = Color.FromArgb(229, 198, 75);
-        static readonly Color OrangeC = Color.FromArgb(240, 140, 60);
-        static readonly Color RedC = Color.FromArgb(230, 80, 60);
-        static readonly Color MarkC = Color.FromArgb(120, 120, 126);
-        static readonly Color FtgRed = Color.FromArgb(245, 45, 38);
-        static readonly Color AccentC = Color.FromArgb(0, 191, 166);
+        // палитра оверлея (цвета задаются в настройках)
+        Color HeaderC { get { return st.GetColor("color.header", Color.FromArgb(240, 240, 240)); } }
+        Color LabelC { get { return st.GetColor("color.label", Color.FromArgb(166, 166, 166)); } }
+        Color ValueC { get { return st.GetColor("color.value", Color.FromArgb(240, 240, 240)); } }
+        Color LineC { get { return st.GetColor("color.line", Color.FromArgb(82, 82, 88)); } }
+        Color GreenC { get { return st.GetColor("color.green", Color.FromArgb(46, 204, 64)); } }
+        Color YellowC { get { return st.GetColor("color.yellow", Color.FromArgb(229, 198, 75)); } }
+        Color OrangeC { get { return st.GetColor("color.orange", Color.FromArgb(240, 140, 60)); } }
+        Color RedC { get { return st.GetColor("color.red", Color.FromArgb(230, 80, 60)); } }
+        Color MarkC { get { return st.GetColor("color.mark", Color.FromArgb(120, 120, 126)); } }
+        Color FtgRed { get { return st.GetColor("color.ftg", Color.FromArgb(245, 45, 38)); } }
+        Color AccentC { get { return st.GetColor("color.accent", Color.FromArgb(0, 191, 166)); } }
+
+        // цвета текущего блока (переопределяются в «Настройках цвета»)
+        Color curHeader, curLabel, curValue, curBig;
 
         Graphics g;               // null = только измерение
         Settings st;
@@ -43,6 +45,7 @@ namespace K2
         {
             this.g = g; this.st = st; this.s = s; this.stats = stats;
             this.S = dpiScale > 0 ? dpiScale : 1f;
+            curHeader = HeaderC; curLabel = LabelC; curValue = ValueC; curBig = OrangeAccent();
             this.US = Math.Max(50, Math.Min(200, st.GetI("look.scale"))) / 100f;
             int fontPct = Math.Max(50, Math.Min(200, st.GetI("look.fontSize")));
             float fs = S * US * fontPct / 100f;
@@ -139,6 +142,8 @@ namespace K2
         {
             if (!st.GetB("fps.show")) return false;
             if (s.Fps == null && st.GetB("fps.hideNa")) return false;
+            Color statC = OrangeAccent();
+            UseBlock("fps", HeaderC, LabelC, statC, statC);
             Header(x, cw, "FPS", FpsBig());
             List<string> parts = new List<string>();
             if (st.GetB("fps.avg")) parts.Add("AVG: " + (s.FpsAvg != null ? ((int)s.FpsAvg.Value).ToString(Cul) : "—"));
@@ -166,18 +171,20 @@ namespace K2
         bool DrawGpu(float x, float cw)
         {
             if (!st.GetB("gpu.show")) return false;
+            UseBlock("gpu", HeaderC, LabelC, ValueC, ValueC);
+            bool zones = st.GetB("color.gpu.zones");
             Header(x, cw, s.GpuName.Length == 0 ? "GPU" : s.GpuName, null);
-            if (st.GetB("gpu.load")) Row("Load", Pct(s.GpuLoad), LoadColored(s.GpuLoad, st.GetB("gpu.loadcolor")));
-            if (st.GetB("gpu.temp")) Row("Temperature", Temp(s.GpuTemp), TempColored(s.GpuTemp, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
-            if (st.GetB("gpu.hotspot")) Row("Hotspot", Temp(s.GpuHotspot), TempColored(s.GpuHotspot, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
-            if (st.GetB("gpu.memtemp")) Row("Memory temperature", Temp(s.GpuMemTemp), TempColored(s.GpuMemTemp, st.GetI("gpu.warn"), st.GetI("gpu.crit")));
-            if (st.GetB("gpu.clock")) Row("Clock", Freq(s.GpuClock), ValueC);
-            if (st.GetB("gpu.memclock")) Row("Memory clock", Freq(s.GpuMemClock), ValueC);
-            if (st.GetB("gpu.volt")) Row("Voltage", s.GpuVolt != null ? s.GpuVolt.Value.ToString("0.000", Cul) + Loc.T(" V") : "—", ValueC);
-            if (st.GetB("gpu.power")) Row("Power", W(s.GpuPower), ValueC);
-            if (st.GetB("gpu.fanrpm")) Row("Fan speed", s.GpuFanRpm != null ? ((int)s.GpuFanRpm.Value).ToString(Cul) + Loc.T(" RPM") : "—", ValueC);
-            if (st.GetB("gpu.fanpct")) Row("Fan speed %", Pct(s.GpuFanPct), ValueC);
-            if (st.GetB("gpu.vram")) Row("VRAM", Mem(s.GpuMemUsedGb, s.GpuMemTotalGb), ValueC);
+            if (st.GetB("gpu.load")) Row("Load", Pct(s.GpuLoad), zones ? LoadColored(s.GpuLoad, st.GetB("gpu.loadcolor")) : curValue);
+            if (st.GetB("gpu.temp")) Row("Temperature", Temp(s.GpuTemp), zones ? TempColored(s.GpuTemp, st.GetI("gpu.warn"), st.GetI("gpu.crit")) : curValue);
+            if (st.GetB("gpu.hotspot")) Row("Hotspot", Temp(s.GpuHotspot), zones ? TempColored(s.GpuHotspot, st.GetI("gpu.warn"), st.GetI("gpu.crit")) : curValue);
+            if (st.GetB("gpu.memtemp")) Row("Memory temperature", Temp(s.GpuMemTemp), zones ? TempColored(s.GpuMemTemp, st.GetI("gpu.warn"), st.GetI("gpu.crit")) : curValue);
+            if (st.GetB("gpu.clock")) Row("Clock", Freq(s.GpuClock), curValue);
+            if (st.GetB("gpu.memclock")) Row("Memory clock", Freq(s.GpuMemClock), curValue);
+            if (st.GetB("gpu.volt")) Row("Voltage", s.GpuVolt != null ? s.GpuVolt.Value.ToString("0.000", Cul) + Loc.T(" V") : "—", curValue);
+            if (st.GetB("gpu.power")) Row("Power", W(s.GpuPower), curValue);
+            if (st.GetB("gpu.fanrpm")) Row("Fan speed", s.GpuFanRpm != null ? ((int)s.GpuFanRpm.Value).ToString(Cul) + Loc.T(" RPM") : "—", curValue);
+            if (st.GetB("gpu.fanpct")) Row("Fan speed %", Pct(s.GpuFanPct), curValue);
+            if (st.GetB("gpu.vram")) Row("VRAM", Mem(s.GpuMemUsedGb, s.GpuMemTotalGb), curValue);
             Sep();
             return true;
         }
@@ -185,16 +192,18 @@ namespace K2
         bool DrawCpu(float x, float cw)
         {
             if (!st.GetB("cpu.show")) return false;
+            UseBlock("cpu", HeaderC, LabelC, ValueC, ValueC);
+            bool zones = st.GetB("color.cpu.zones");
             Header(x, cw, s.CpuName.Length == 0 ? "CPU" : s.CpuName, null);
-            if (st.GetB("cpu.load")) Row("Load", Pct(s.CpuLoad), LoadColored(s.CpuLoad, st.GetB("cpu.loadcolor")));
-            if (st.GetB("cpu.temp")) Row("Temperature", Temp(s.CpuTemp), TempColored(s.CpuTemp, st.GetI("cpu.warn"), st.GetI("cpu.crit")));
+            if (st.GetB("cpu.load")) Row("Load", Pct(s.CpuLoad), zones ? LoadColored(s.CpuLoad, st.GetB("cpu.loadcolor")) : curValue);
+            if (st.GetB("cpu.temp")) Row("Temperature", Temp(s.CpuTemp), zones ? TempColored(s.CpuTemp, st.GetI("cpu.warn"), st.GetI("cpu.crit")) : curValue);
             if (st.GetB("cpu.ccd")) Row("Core temperatures", s.CpuCoreTempMin != null
-                ? Temp(s.CpuCoreTempMin) + "–" + Temp(s.CpuCoreTempMax) : "—", ValueC);
-            if (st.GetB("cpu.clock")) Row("Clock (max.)", Freq(s.CpuFreq), ValueC);
-            if (st.GetB("cpu.eff")) Row("Clock (eff.)", Freq(s.CpuEffFreq), ValueC);
-            if (st.GetB("cpu.power")) Row("Power", W(s.CpuPower), ValueC);
-            if (st.GetB("cpu.fanrpm")) Row("Fan speed", s.CpuFanRpm != null ? ((int)s.CpuFanRpm.Value).ToString(Cul) + Loc.T(" RPM") : "—", ValueC);
-            if (st.GetB("cpu.fanpct")) Row("Fan speed %", Pct(s.CpuFanPct), ValueC);
+                ? Temp(s.CpuCoreTempMin) + "–" + Temp(s.CpuCoreTempMax) : "—", curValue);
+            if (st.GetB("cpu.clock")) Row("Clock (max.)", Freq(s.CpuFreq), curValue);
+            if (st.GetB("cpu.eff")) Row("Clock (eff.)", Freq(s.CpuEffFreq), curValue);
+            if (st.GetB("cpu.power")) Row("Power", W(s.CpuPower), curValue);
+            if (st.GetB("cpu.fanrpm")) Row("Fan speed", s.CpuFanRpm != null ? ((int)s.CpuFanRpm.Value).ToString(Cul) + Loc.T(" RPM") : "—", curValue);
+            if (st.GetB("cpu.fanpct")) Row("Fan speed %", Pct(s.CpuFanPct), curValue);
 
             // таблица частот по ядрам: левая половина / правая половина
             int n = s.CoreFreqs.Count;
@@ -223,6 +232,7 @@ namespace K2
         bool DrawRam(float x, float cw)
         {
             if (!st.GetB("ram.show")) return false;
+            UseBlock("ram", HeaderC, LabelC, ValueC, ValueC);
             Header(x, cw, "RAM", null);
             string fmt = st.GetS("ram.format");
             if (st.GetB("ram.used"))
@@ -231,9 +241,9 @@ namespace K2
                 if (fmt == "used") v = Mem(s.RamUsedGb, null);
                 else if (fmt == "pct") v = ((int)s.RamPct).ToString(Cul) + " %";
                 else v = Mem(s.RamUsedGb, s.RamTotalGb);
-                Row("Used", v, ValueC);
+                Row("Used", v, curValue);
             }
-            if (st.GetB("ram.load")) Row("Load", ((int)s.RamPct).ToString(Cul) + " %", ValueC);
+            if (st.GetB("ram.load")) Row("Load", ((int)s.RamPct).ToString(Cul) + " %", curValue);
             double? sp = s.RamSpeedMHz;
             string mode = st.GetS("ram.speedMode");
             if (mode == "manual") sp = st.GetI("ram.speedManual");
@@ -243,7 +253,7 @@ namespace K2
                 if (cap != null && sp != null && sp.Value > cap.Value) sp = cap;
             }
             if (st.GetB("ram.speed") && sp != null)
-                Row("Speed", ((int)sp.Value).ToString(Cul) + Loc.T(" MHz"), ValueC);
+                Row("Speed", ((int)sp.Value).ToString(Cul) + Loc.T(" MHz"), curValue);
             if (st.GetB("ram.dimmt") && s.RamDimmTemp != null) Row("DIMM temperature", Temp(s.RamDimmTemp), TempColored(s.RamDimmTemp, 75, 85));
             Sep();
             return true;
@@ -252,6 +262,8 @@ namespace K2
         bool DrawStat(float x, float cw)
         {
             if (!st.GetB("stat.show") || stats == null) return false;
+            Color statC = OrangeAccent();
+            UseBlock("stat", HeaderC, LabelC, statC, statC);
             Header(x, cw, "Statistics", stats.Paused ? "paused" : null);
             StatRow("stat.gput", "Min/Max GPU", "gput", true);
             StatRow("stat.cput", "Min/Max CPU", "cput", true);
@@ -272,7 +284,7 @@ namespace K2
             if (v == null) return;
             if (temp) v = TempPair(statKey, mode);
             else if (suffix.Length > 0) v += suffix;
-            Row(label, v, OrangeAccent());
+            Row(label, v, curValue);
         }
 
         static int Mode(string m)
@@ -298,7 +310,15 @@ namespace K2
             return string.Join("/", seg) + " °F";
         }
 
-        static Color OrangeAccent() { return Color.FromArgb(255, 170, 80); }
+        Color OrangeAccent() { return st.GetColor("color.stat", Color.FromArgb(255, 170, 80)); }
+
+        void UseBlock(string block, Color header, Color label, Color value, Color big)
+        {
+            curHeader = st.GetColor("color." + block + ".header", header);
+            curLabel = st.GetColor("color." + block + ".label", label);
+            curValue = st.GetColor("color." + block + ".value", value);
+            curBig = st.GetColor("color." + block + ".value", big);
+        }
 
         bool DrawFtg(float x, float cw)
         {
@@ -371,9 +391,9 @@ namespace K2
         {
             int h = (int)HdrH();
             text = Loc.T(text);
-            Draw(g2 => GText(g2, text, fH, new Rectangle((int)x, (int)y, (int)(cw * 0.62f), h), HeaderC, false));
+            Draw(g2 => GText(g2, text, fH, new Rectangle((int)x, (int)y, (int)(cw * 0.62f), h), curHeader, false));
             if (bigValue != null)
-                Draw(g2 => GText(g2, bigValue, fBig, new Rectangle((int)x, (int)y, (int)cw, h), OrangeAccent(), true));
+                Draw(g2 => GText(g2, bigValue, fBig, new Rectangle((int)x, (int)y, (int)cw, h), curBig, true));
             y += HdrH();
         }
 
@@ -382,7 +402,7 @@ namespace K2
             int h = (int)RowH();
             float x = Pad();
             float cw = CurrentW;
-            Draw(g2 => GText(g2, Loc.T(label), fL, new Rectangle((int)x, (int)y, (int)(cw * 0.7f), h), LabelC, false));
+            Draw(g2 => GText(g2, Loc.T(label), fL, new Rectangle((int)x, (int)y, (int)(cw * 0.7f), h), curLabel, false));
             Draw(g2 => GText(g2, value, fV, new Rectangle((int)x, (int)y, (int)cw, h), vc, true));
             y += RowH();
         }
@@ -391,7 +411,7 @@ namespace K2
         {
             int h = (int)RowH();
             float x = Pad();
-            Draw(g2 => GText(g2, text, fL, new Rectangle((int)x, (int)y, (int)CurrentW, h), LabelC, false));
+            Draw(g2 => GText(g2, text, fL, new Rectangle((int)x, (int)y, (int)CurrentW, h), curLabel, false));
             y += h;
         }
 
@@ -401,8 +421,8 @@ namespace K2
             string label = Loc.T("Core ") + (idx + 1).ToString("00", Cul) + ":";
             int hh = (int)CoreH();
             float cx = Pad();
-            Draw(g2 => GText(g2, label, fC, new Rectangle((int)x, (int)y, (int)(w * 0.55f), hh), LabelC, false));
-            Draw(g2 => GText(g2, Freq(s.CoreFreqs[idx]), fC, new Rectangle((int)x, (int)y, (int)w, hh), ValueC, true));
+            Draw(g2 => GText(g2, label, fC, new Rectangle((int)x, (int)y, (int)(w * 0.55f), hh), curLabel, false));
+            Draw(g2 => GText(g2, Freq(s.CoreFreqs[idx]), fC, new Rectangle((int)x, (int)y, (int)w, hh), curValue, true));
         }
 
         void DrawCoreGraph(float x, float w, float h)
@@ -444,7 +464,7 @@ namespace K2
                 if (st.GetB("cpu.corelabels"))
                     Draw(g2 => GText(g2, "P" + i, fC,
                         new Rectangle((int)(bx - slot), (int)(baseline + 2 * S), (int)(slot * 2f), (int)(10 * S)),
-                        MarkC, false));
+                        curLabel, false));
             }
             y += h;
         }
@@ -502,14 +522,14 @@ namespace K2
 
         Color TempColored(double? t, int warn, int crit)
         {
-            if (t == null) return ValueC;
+            if (t == null) return curValue;
             if (t.Value >= crit) return RedC;
             if (t.Value >= warn) return OrangeC;
             return GreenC;
         }
         Color LoadColored(double? v, bool enabled)
         {
-            if (v == null || !enabled) return ValueC;
+            if (v == null || !enabled) return curValue;
             double x = v.Value;
             if (x >= 90) return RedC;
             if (x >= 75) return OrangeC;

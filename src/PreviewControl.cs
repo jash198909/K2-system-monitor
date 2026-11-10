@@ -38,7 +38,8 @@ namespace K2
             int a = (int)Math.Round(255.0 * (100 - opacity) / 100.0);
             if (a > 0)
             {
-                using (SolidBrush b = new SolidBrush(Color.FromArgb(a, 42, 42, 46)))
+                Color panel = St.GetColor("color.panel", Color.FromArgb(20, 22, 26));
+                using (SolidBrush b = new SolidBrush(Color.FromArgb(a, panel.R, panel.G, panel.B)))
                     g.FillRectangle(b, ClientRectangle);
             }
 

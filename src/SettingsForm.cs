@@ -35,6 +35,8 @@ namespace K2
             public string[] Buttons;
             public int OrderIndex;
             public object Tag;
+            public string FallbackKey;
+            public Color DefaultColor;
         }
 
         MainForm owner;
@@ -74,11 +76,11 @@ namespace K2
 
         static readonly string[] SectionNames = new string[]
         {
-            "general", "pos", "look", "keys", "fps", "gpu", "cpu", "ram", "stat", "ftg"
+            "general", "pos", "look", "colors", "keys", "fps", "gpu", "cpu", "ram", "stat", "ftg"
         };
         static readonly string[] SectionTitles = new string[]
         {
-            "General", "Position", "Appearance", "Hotkeys",
+            "General", "Position", "Appearance", "Colors", "Hotkeys",
             "FPS", "GPU", "CPU", "RAM", "Statistics", "Frame time graph"
         };
 
@@ -148,6 +150,19 @@ namespace K2
         SRow INFO(string text) { return R("info", text, null); }
         SRow SEC(string text) { return R("section", text, null); }
         SRow HK(string label, string key) { return R("hotkey", label, key); }
+        SRow COLOR(string label, string key, Color def)
+        {
+            SRow r = R("color", label, key);
+            r.DefaultColor = def;
+            return r;
+        }
+        SRow COLOR(string label, string key, string fallbackKey, Color def)
+        {
+            SRow r = R("color", label, key);
+            r.FallbackKey = fallbackKey;
+            r.DefaultColor = def;
+            return r;
+        }
 
         void BuildRows()
         {
@@ -204,6 +219,74 @@ namespace K2
                     SL("Font size", "look.fontSize", 60, 150);
                     SEC("Overlay elements");
                     T("Show time", "look.showTime");
+                    break;
+
+                case "colors":
+                    Color cPanel = Color.FromArgb(20, 22, 26);
+                    Color cHeader = Color.FromArgb(240, 240, 240);
+                    Color cLabel = Color.FromArgb(166, 166, 166);
+                    Color cValue = Color.FromArgb(240, 240, 240);
+                    Color cLine = Color.FromArgb(82, 82, 88);
+                    Color cMark = Color.FromArgb(120, 120, 126);
+                    Color cAccent = Color.FromArgb(0, 191, 166);
+                    Color cStat = Color.FromArgb(255, 170, 80);
+                    Color cGreen = Color.FromArgb(46, 204, 64);
+                    Color cYellow = Color.FromArgb(229, 198, 75);
+                    Color cOrange = Color.FromArgb(240, 140, 60);
+                    Color cRed = Color.FromArgb(230, 80, 60);
+                    Color cFtg = Color.FromArgb(245, 45, 38);
+
+                    R("buttons", "", "color.resetbtn").Buttons = new string[] { "Defaults" };
+                    INFO("Colors apply to the overlay only; the settings window and tray menu keep their current style.");
+
+                    SEC("Overlay background");
+                    COLOR("Panel background", "color.panel", cPanel);
+                    SEC("Base text");
+                    COLOR("Header text", "color.header", cHeader);
+                    COLOR("Labels", "color.label", cLabel);
+                    COLOR("Values", "color.value", cValue);
+                    SEC("Separators and hints");
+                    COLOR("Separators", "color.line", cLine);
+                    COLOR("Time and hints", "color.mark", cMark);
+                    SEC("Accents");
+                    COLOR("K2 accent", "color.accent", cAccent);
+                    COLOR("Accent values", "color.stat", cStat);
+                    SEC("Load and temperature zones");
+                    COLOR("Normal", "color.green", cGreen);
+                    COLOR("Warning", "color.yellow", cYellow);
+                    COLOR("High", "color.orange", cOrange);
+                    COLOR("Critical", "color.red", cRed);
+                    SEC("Graphs");
+                    COLOR("Frame time graph", "color.ftg", cFtg);
+
+                    SEC("FPS block");
+                    COLOR("Header text", "color.fps.header", "color.header", cHeader);
+                    COLOR("Labels", "color.fps.label", "color.label", cLabel);
+                    COLOR("Values", "color.fps.value", "color.stat", cStat);
+
+                    SEC("GPU block");
+                    COLOR("Header text", "color.gpu.header", "color.header", cHeader);
+                    COLOR("Labels", "color.gpu.label", "color.label", cLabel);
+                    COLOR("Values", "color.gpu.value", "color.value", cValue);
+                    T("Use zone colors", "color.gpu.zones");
+
+                    SEC("CPU block");
+                    COLOR("Header text", "color.cpu.header", "color.header", cHeader);
+                    COLOR("Labels", "color.cpu.label", "color.label", cLabel);
+                    COLOR("Values", "color.cpu.value", "color.value", cValue);
+                    T("Use zone colors", "color.cpu.zones");
+
+                    SEC("RAM block");
+                    COLOR("Header text", "color.ram.header", "color.header", cHeader);
+                    COLOR("Labels", "color.ram.label", "color.label", cLabel);
+                    COLOR("Values", "color.ram.value", "color.value", cValue);
+
+                    SEC("Statistics block");
+                    COLOR("Header text", "color.stat.header", "color.header", cHeader);
+                    COLOR("Labels", "color.stat.label", "color.label", cLabel);
+                    COLOR("Values", "color.stat.value", "color.stat", cStat);
+
+                    INFO("Zone colors apply to load and temperature. Turn them off in the GPU or CPU block to use the block value color for every reading.");
                     break;
 
                 case "keys":
@@ -647,7 +730,7 @@ namespace K2
         {
             using (Brush b = new SolidBrush(NavBack)) g.FillRectangle(b, 0, TopH(), NavW(), Height - TopH());
             int y = TopH() + 16;
-            y = NavGroup(g, y, "OVERLAY", new string[] { "general", "pos", "look", "keys" });
+            y = NavGroup(g, y, "OVERLAY", new string[] { "general", "pos", "look", "colors", "keys" });
             y = NavGroup(g, y, "METRICS", new string[] { "fps", "gpu", "cpu", "ram", "stat", "ftg" });
 
             // Ссылка «Автору на кофе» — сразу под пунктом «График времени кадра».
@@ -674,8 +757,8 @@ namespace K2
         int NavGroup(Graphics g, int y, string cat, string[] items)
         {
             bool compact = Height < 700;
-            int step = compact ? 30 : 38;
-            int itemH = compact ? 26 : 34;
+            int step = compact ? 26 : 38;
+            int itemH = compact ? 24 : 34;
             using (Brush b = new SolidBrush(NavDim)) g.DrawString(Loc.T(cat), fNavCat, b, 16, y);
             y += compact ? 18 : 22;
             for (int i = 0; i < items.Length; i++)
@@ -752,6 +835,10 @@ namespace K2
                     {
                         OrderRowPaint(g, r, cr, y);
                     }
+                    else if (r.Kind == "color")
+                    {
+                        ColorRowPaint(g, r, cr, y);
+                    }
                     else
                     {
                         using (Brush b = new SolidBrush(NavText))
@@ -781,6 +868,45 @@ namespace K2
             r.Tag = dn;
             ArrowBtn(g, up, true);
             ArrowBtn(g, dn, false);
+        }
+
+        Color RowColor(SRow r)
+        {
+            Color fallback = r.FallbackKey != null
+                ? draft.GetColor(r.FallbackKey, r.DefaultColor)
+                : r.DefaultColor;
+            return draft.GetColor(r.Key, fallback);
+        }
+
+        void ColorRowPaint(Graphics g, SRow r, Rectangle cr, int y)
+        {
+            using (Brush b = new SolidBrush(NavText))
+                g.DrawString(r.Label, fLabel, b, cr.X + 4, y + 14);
+            Rectangle sw = new Rectangle(cr.Right - 250, y + 8, 246, 32);
+            r.Ctl = sw;
+            Color c = RowColor(r);
+            using (Brush b = new SolidBrush(c)) FillRound(g, sw, 6, b);
+            using (Pen p = new Pen(CtlBorder)) DrawRound(g, p, sw, 6);
+            int lum = c.R * 299 + c.G * 587 + c.B * 114;
+            Color txt = lum > 140000 ? Color.FromArgb(20, 26, 34) : Color.White;
+            string hex = "#" + c.R.ToString("X2") + c.G.ToString("X2") + c.B.ToString("X2");
+            TextRenderer.DrawText(g, hex, fValue, sw, txt,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+
+        void PickColor(SRow r)
+        {
+            using (ColorDialog d = new ColorDialog())
+            {
+                d.FullOpen = true;
+                d.AnyColor = true;
+                d.Color = RowColor(r);
+                if (d.ShowDialog(this) == DialogResult.OK)
+                {
+                    draft.SetColor(r.Key, d.Color);
+                    AfterChange();
+                }
+            }
         }
 
         void ArrowBtn(Graphics g, Rectangle r, bool up)
@@ -1114,6 +1240,9 @@ namespace K2
                         else if (dn.Width > 0 && dn.Contains(e.Location)) MoveOrder(r.OrderIndex, 1);
                         break;
                     }
+                    case "color":
+                        if (r.Ctl.Contains(e.Location)) PickColor(r);
+                        break;
                 }
                 return;
             }
@@ -1169,10 +1298,10 @@ namespace K2
         string NavAt(int y)
         {
             bool compact = Height < 700;
-            int step = compact ? 30 : 38;
-            int itemH = compact ? 26 : 34;
+            int step = compact ? 26 : 38;
+            int itemH = compact ? 24 : 34;
             int yy = TopH() + 16 + (compact ? 18 : 22);
-            string[] grp1 = new string[] { "general", "pos", "look", "keys" };
+            string[] grp1 = new string[] { "general", "pos", "look", "colors", "keys" };
             foreach (string s in grp1) { if (y >= yy && y < yy + itemH) return s; yy += step; }
             yy += (compact ? 4 : 10) + (compact ? 18 : 22);
             string[] grp2 = new string[] { "fps", "gpu", "cpu", "ram", "stat", "ftg" };
@@ -1229,6 +1358,12 @@ namespace K2
             else if (r.Key == "stat.resetbtn")
             {
                 owner.ResetSession();
+            }
+            else if (r.Key == "color.resetbtn")
+            {
+                draft.ResetColors();
+                BuildRows();
+                AfterChange();
             }
         }
 
