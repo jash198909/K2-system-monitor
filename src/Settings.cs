@@ -47,6 +47,7 @@ namespace K2
             "color.cpu.header", "color.cpu.label", "color.cpu.value",
             "color.ram.header", "color.ram.label", "color.ram.value",
             "color.stat.header", "color.stat.label", "color.stat.value",
+            "color.power.header", "color.power.label", "color.power.value",
             "color.gpu.zones", "color.cpu.zones"
         };
 
@@ -102,7 +103,7 @@ namespace K2
                 case "pos.pin": return "0";
                 case "pos.mode": return "pin";
                 case "pos.monitor": return "-1";
-                case "pos.order": return "fps,gpu,cpu,ram,stat,ftg";
+                case "pos.order": return "fps,gpu,cpu,ram,stat,power,ftg";
                 // внешний вид
                 case "look.width": return "100";
                 case "look.scale": return "100";
@@ -187,6 +188,10 @@ namespace K2
                 case "ram.format": return "usedtotal";
                 case "ram.speedMode": return "hw";
                 case "ram.speedManual": return "2400";
+                // питание
+                case "power.show": return "1";
+                case "power.other": return "60";
+                case "power.eff": return "90";
                 // статистика
                 case "stat.show": return "0";
                 case "stat.gput": return "1";
@@ -218,6 +223,8 @@ namespace K2
             ClampInt("look.radius", 0, 30);
             ClampInt("look.fontSize", 60, 150);
             ClampInt("look.heightPx", 0, 4000);
+            ClampInt("power.other", 0, 300);
+            ClampInt("power.eff", 50, 100);
             ClampInt("pos.offX", -100, 100);
             ClampInt("pos.offY", -100, 100);
             ClampInt("pos.monitor", -1, 15);
@@ -244,6 +251,12 @@ namespace K2
 
             if (GetS("look.font").Trim().Length == 0) Set("look.font", "Segoe UI");
             if (GetS("pos.order").Trim().Length == 0) Set("pos.order", Default("pos.order"));
+            if (GetB("power.show"))
+            {
+                string order = GetS("pos.order");
+                if (("," + order + ",").IndexOf(",power,", StringComparison.OrdinalIgnoreCase) < 0)
+                    Set("pos.order", order + ",power");
+            }
         }
 
         void ClampInt(string k, int min, int max)

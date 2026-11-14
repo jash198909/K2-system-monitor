@@ -12,6 +12,8 @@ fully configurable.
 
 ![K2 per-block colors](docs/screenshots/colors-blocks.png)
 
+![K2 power](docs/screenshots/power.png)
+
 ## Features
 
 - Dark borderless widget, always on top, draggable, remembers position
@@ -26,6 +28,11 @@ fully configurable.
 - Tray **Move / resize** mode: drag to move, drag edges/corners to resize; the
   overlay is fixed outside this mode. **Fit to content** and auto width shrink
   it to the visible blocks
+- In normal mode the overlay is click-through — it does not block mouse clicks
+  on the window underneath
+- Approximate system power: CPU + GPU + other components, plus an estimate from
+  the wall using PSU efficiency; additional power sensors (RAM, chipset, PSU)
+  are detected automatically
 - Overlay color scheme: panel background (with a transparency slider), headers,
   labels, values, separators, accents, load/temperature zones and the
   frame-time graph; each overlay block (FPS, GPU, CPU, RAM, Statistics) can set
@@ -93,6 +100,19 @@ Alt+F7 compact mode, Alt+F11 pause/resume measuring.
   `tools/PresentMon-2.4.1-x64.exe` is missing, run `resolve.ps1`.
 
 ## Changelog
+
+### 1.5.1
+
+- Added an approximate **Power** block: CPU + GPU + other components, and an
+  estimate from the wall using PSU efficiency. Values are marked with **≈**.
+  Additional power sensors (RAM, chipset, PSU input) are picked up
+  automatically when present.
+- Added **Settings → Power supply** with the "other components" baseline and
+  PSU efficiency.
+- In normal mode the overlay is now **click-through**: mouse clicks reach the
+  window underneath it. Only **Move / resize** mode captures the mouse.
+- Added **History** to the tray menu, so the history window remains accessible
+  without clicking the overlay graph.
 
 ### 1.5.0
 

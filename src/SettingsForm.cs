@@ -76,12 +76,12 @@ namespace K2
 
         static readonly string[] SectionNames = new string[]
         {
-            "general", "pos", "look", "colors", "keys", "fps", "gpu", "cpu", "ram", "stat", "ftg"
+            "general", "pos", "look", "colors", "keys", "fps", "gpu", "cpu", "ram", "power", "stat", "ftg"
         };
         static readonly string[] SectionTitles = new string[]
         {
             "General", "Position", "Appearance", "Colors", "Hotkeys",
-            "FPS", "GPU", "CPU", "RAM", "Statistics", "Frame time graph"
+            "FPS", "GPU", "CPU", "RAM", "Power supply", "Statistics", "Frame time graph"
         };
 
         public SettingsForm(MainForm owner)
@@ -294,6 +294,11 @@ namespace K2
                     COLOR("Labels", "color.ram.label", "color.label", cLabel);
                     COLOR("Values", "color.ram.value", "color.value", cValue);
 
+                    SEC("Power block");
+                    COLOR("Header text", "color.power.header", "color.header", cHeader);
+                    COLOR("Labels", "color.power.label", "color.label", cLabel);
+                    COLOR("Values", "color.power.value", "color.value", cValue);
+
                     SEC("Statistics block");
                     COLOR("Header text", "color.stat.header", "color.header", cHeader);
                     COLOR("Labels", "color.stat.label", "color.label", cLabel);
@@ -380,6 +385,14 @@ namespace K2
                     CB("Memory format", "ram.format", "Used / total,Used only,Percent", new string[] { "usedtotal", "used", "pct" });
                     break;
 
+                case "power":
+                    SEC("Power estimate");
+                    T("Show power block", "power.show");
+                    SL("Other components, W", "power.other", 0, 300);
+                    SL("PSU efficiency, %", "power.eff", 50, 100);
+                    INFO("The total is approximate: CPU + GPU + other components. Additional power sensors (RAM, chipset, PSU) are used automatically when available. Wall power also accounts for PSU efficiency; if the PSU reports input power, that value is used.");
+                    break;
+
                 case "stat":
                     SEC("Block contents");
                     T("Show statistics block", "stat.show");
@@ -431,6 +444,7 @@ namespace K2
                 case "gpu": return "GPU";
                 case "cpu": return "CPU";
                 case "ram": return "RAM";
+                case "power": return "Power supply";
                 case "stat": return "Statistics";
                 case "ftg": return "Frame time graph";
             }
@@ -445,6 +459,7 @@ namespace K2
                 case "gpu": return draft.GetB("gpu.show");
                 case "cpu": return draft.GetB("cpu.show");
                 case "ram": return draft.GetB("ram.show");
+                case "power": return draft.GetB("power.show");
                 case "stat": return draft.GetB("stat.show");
                 case "ftg": return draft.GetB("ft.show");
             }
@@ -744,7 +759,7 @@ namespace K2
             using (Brush b = new SolidBrush(NavBack)) g.FillRectangle(b, 0, TopH(), NavW(), Height - TopH());
             int y = TopH() + 16;
             y = NavGroup(g, y, "OVERLAY", new string[] { "general", "pos", "look", "colors", "keys" });
-            y = NavGroup(g, y, "METRICS", new string[] { "fps", "gpu", "cpu", "ram", "stat", "ftg" });
+            y = NavGroup(g, y, "METRICS", new string[] { "fps", "gpu", "cpu", "ram", "power", "stat", "ftg" });
 
             // Ссылка «Автору на кофе» — сразу под пунктом «График времени кадра».
             rectCoffee = new Rectangle(6, y + 4, NavW() - 12, 26);
@@ -770,7 +785,7 @@ namespace K2
         int NavGroup(Graphics g, int y, string cat, string[] items)
         {
             bool compact = Height < 700;
-            int step = compact ? 26 : 38;
+            int step = compact ? 25 : 36;
             int itemH = compact ? 24 : 34;
             using (Brush b = new SolidBrush(NavDim)) g.DrawString(Loc.T(cat), fNavCat, b, 16, y);
             y += compact ? 18 : 22;
@@ -1311,13 +1326,13 @@ namespace K2
         string NavAt(int y)
         {
             bool compact = Height < 700;
-            int step = compact ? 26 : 38;
+            int step = compact ? 25 : 36;
             int itemH = compact ? 24 : 34;
             int yy = TopH() + 16 + (compact ? 18 : 22);
             string[] grp1 = new string[] { "general", "pos", "look", "colors", "keys" };
             foreach (string s in grp1) { if (y >= yy && y < yy + itemH) return s; yy += step; }
             yy += (compact ? 4 : 10) + (compact ? 18 : 22);
-            string[] grp2 = new string[] { "fps", "gpu", "cpu", "ram", "stat", "ftg" };
+            string[] grp2 = new string[] { "fps", "gpu", "cpu", "ram", "power", "stat", "ftg" };
             foreach (string s in grp2) { if (y >= yy && y < yy + itemH) return s; yy += step; }
             return null;
         }

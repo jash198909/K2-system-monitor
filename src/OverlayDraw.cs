@@ -158,6 +158,7 @@ namespace K2
                 else if (b == "gpu") drew = DrawGpu(x, cw);
                 else if (b == "cpu") drew = DrawCpu(x, cw);
                 else if (b == "ram") drew = DrawRam(x, cw);
+                else if (b == "power") drew = DrawPower(x, cw);
                 else if (b == "stat") drew = DrawStat(x, cw);
                 else if (b == "ftg") drew = DrawFtg(x, cw);
                 if (drew && !first) { /* разделитель уже добавлен внутри */ }
@@ -286,6 +287,28 @@ namespace K2
             if (st.GetB("ram.speed") && sp != null)
                 Row("Speed", ((int)sp.Value).ToString(Cul) + Loc.T(" MHz"), curValue);
             if (st.GetB("ram.dimmt") && s.RamDimmTemp != null) Row("DIMM temperature", Temp(s.RamDimmTemp), TempColored(s.RamDimmTemp, 75, 85));
+            Sep();
+            return true;
+        }
+
+        bool DrawPower(float x, float cw)
+        {
+            if (!st.GetB("power.show")) return false;
+            if (s.CpuPower == null && s.GpuPower == null) return false;
+            UseBlock("power", HeaderC, LabelC, ValueC, ValueC);
+            Header(x, cw, "Power estimate", null);
+
+            double other = Math.Max(0, st.GetI("power.other")) + (s.AuxPower ?? 0);
+            double dc = (s.CpuPower ?? 0) + (s.GpuPower ?? 0) + other;
+            int eff = Math.Max(50, Math.Min(100, st.GetI("power.eff")));
+            double? wall = s.PsuInputPower;
+            if (wall == null) wall = dc / (eff / 100.0);
+
+            Row("CPU", W(s.CpuPower), curValue);
+            Row("GPU", W(s.GpuPower), curValue);
+            Row("Other", "≈ " + W(other), curValue);
+            Row("System (approx.)", "≈ " + W(dc), curValue);
+            Row("From wall (approx.)", "≈ " + W(wall), curValue);
             Sep();
             return true;
         }

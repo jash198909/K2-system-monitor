@@ -182,6 +182,7 @@ namespace K2
         struct BLENDFUNCTION { public byte BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat; }
         const int GWL_EXSTYLE = -20;
         const int WS_EX_LAYERED = 0x80000;
+        const int WS_EX_TRANSPARENT = 0x20;
         const uint SWP_NOMOVE = 0x2, SWP_NOSIZE = 0x1, SWP_NOZORDER = 0x4, SWP_FRAMECHANGED = 0x20;
         const int ULW_ALPHA = 2;
         const byte AC_SRC_OVER = 0, AC_SRC_ALPHA = 1;
@@ -550,6 +551,7 @@ namespace K2
             {
                 editMode = miEdit.Checked;
                 UpdateRegion();
+                ApplyTransparencyKey();
                 if (!editMode)
                 {
                     Cursor = Cursors.Default;
@@ -563,6 +565,10 @@ namespace K2
             ToolStripMenuItem fit = new ToolStripMenuItem(Loc.T("Fit to content"));
             fit.Click += delegate { FitToContent(); };
             menu.Items.Add(fit);
+
+            ToolStripMenuItem hist = new ToolStripMenuItem(Loc.T("History"));
+            hist.Click += delegate { ToggleHistory(); };
+            menu.Items.Add(hist);
             menu.Items.Add(new ToolStripSeparator());
 
             miEnabled = new ToolStripMenuItem(Loc.T("Overlay enabled (master)"));
@@ -1356,9 +1362,14 @@ namespace K2
         {
             if (!IsHandleCreated || St == null) return;
             int ex = GetWindowLong(Handle, GWL_EXSTYLE);
-            if ((ex & WS_EX_LAYERED) == 0)
+            int want = ex | WS_EX_LAYERED;
+            // В обычном режиме оверлей не должен перехватывать мышь:
+            // клики проходят в окно под ним. В режиме правки — наоборот.
+            if (editMode) want &= ~WS_EX_TRANSPARENT;
+            else want |= WS_EX_TRANSPARENT;
+            if (want != ex)
             {
-                SetWindowLong(Handle, GWL_EXSTYLE, ex | WS_EX_LAYERED);
+                SetWindowLong(Handle, GWL_EXSTYLE, want);
                 SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0,
                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
             }

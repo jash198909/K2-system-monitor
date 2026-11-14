@@ -28,6 +28,8 @@ namespace K2
         public double? CpuLoad, CpuTemp, CpuFreq, CpuEffFreq, CpuPower, CpuFanPct, CpuFanRpm;
         public double? CpuCoreTempMin, CpuCoreTempMax;
         public double? GpuClock, GpuVolt, GpuHotspot, GpuMemTemp, GpuMemClock;
+        public double? AuxPower;
+        public double? PsuInputPower;
         public List<double?> CoreFreqs = new List<double?>();
         public List<double?> CoreEff = new List<double?>();
         public List<double> ThreadLoads = new List<double>();
@@ -150,7 +152,7 @@ namespace K2
             c.IsStorageEnabled = false;
             c.IsControllerEnabled = false;
             c.IsNetworkEnabled = false;
-            c.IsPsuEnabled = false;
+            c.IsPsuEnabled = true;
             c.IsBatteryEnabled = false;
             c.Open();
             c.Accept(visitor);
@@ -333,6 +335,8 @@ namespace K2
                 s.GpuMemTemp = Val(Find(gpu, SensorType.Temperature, "GPU Memory"));
             }
 
+            CollectAuxPower(s);
+
             // VRAM: в разных сборках LHM датчики памяти висят либо на GPU, либо на
             // узле [Memory]. Сканируем всё дерево и берём выделенную видеопамять;
             // D3D Shared / Virtual Memory — это ОЗУ, а не VRAM.
@@ -420,6 +424,63 @@ namespace K2
         {
             try { if (computer != null) { computer.Close(); computer = null; } }
             catch { }
+        }
+
+        static void CollectAuxPower(Snapshot s)
+        {
+            double aux = 0;
+            bool found = false;
+            double? psu = null;
+            foreach (IHardware hw in computer.Hardware)
+                ScanPower(hw, ref aux, ref found, ref psu);
+            s.AuxPower = found ? (double?)aux : null;
+            s.PsuInputPower = psu;
+        }
+
+        static void ScanPower(IHardware hw, ref double aux, ref bool found, ref double? psu)
+        {
+            string ht = hw.HardwareType.ToString();
+            bool skip = ht == "Cpu" || ht.StartsWith("Gpu", StringComparison.OrdinalIgnoreCase);
+            if (!skip)
+            {
+                foreach (ISensor sn in hw.Sensors)
+                {
+                    if (sn.SensorType != SensorType.Power || !sn.Value.HasValue) continue;
+                    string n = (sn.Name ?? "").ToLowerInvariant();
+                    if (ht == "Psu")
+                    {
+                        // Настоящее потребление из розетки, если БП отдаёт телеметрию.
+                        if (n.Contains("input") || n.Contains(" ac"))
+                        {
+                            double v = sn.Value.Value;
+                            if (v > 0 && (psu == null || v > psu.Value)) psu = v;
+                        }
+                    }
+                    else if (ht == "Memory")
+                    {
+                        if (n.Contains("virtual") || n.Contains("total")) continue;
+                        aux += sn.Value.Value;
+                        found = true;
+                    }
+                    else if (ht == "Storage")
+                    {
+                        aux += sn.Value.Value;
+                        found = true;
+                    }
+                    else if (ht == "Motherboard")
+                    {
+                        // Только чипсет и память: VRM/CPU-датчики уже входят в CPU Package.
+                        if ((n.Contains("chipset") || n.Contains("pch") ||
+                             n.Contains("dimm") || n.Contains("memory") || n.Contains("ram")) &&
+                            !n.Contains("cpu") && !n.Contains("vrm") && !n.Contains("gpu"))
+                        {
+                            aux += sn.Value.Value;
+                            found = true;
+                        }
+                    }
+                }
+            }
+            foreach (IHardware sub in hw.SubHardware) ScanPower(sub, ref aux, ref found, ref psu);
         }
 
         static ISensor Find(IHardware hw, SensorType type, string namePart)
@@ -557,6 +618,7 @@ namespace K2
             s.GpuName = "Radeon RX 9060 XT";
             s.CpuName = "Xeon E5-2697 v4";
             s.GpuLoad = 74; s.GpuTemp = 46; s.GpuPower = 14.8; s.GpuFanPct = 38;
+            s.AuxPower = 8.0;
             s.GpuMemUsedGb = 1.8; s.GpuMemTotalGb = 15.9; s.GpuClock = 1700; s.GpuVolt = 0.95;
             s.GpuHotspot = 57; s.GpuMemTemp = 52; s.GpuMemClock = 2502; s.GpuFanRpm = 1420;
             s.CpuLoad = 82; s.CpuTemp = 70; s.CpuFreq = 3100; s.CpuEffFreq = 2400; s.CpuPower = 31.5;
